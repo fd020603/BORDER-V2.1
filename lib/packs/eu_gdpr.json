@@ -1,0 +1,366 @@
+{
+  "pack_meta": {
+    "id": "EU_GDPR_v2",
+    "layer": 1,
+    "country_code": "EU",
+    "law_name": "유럽연합 일반 개인정보보호법 (EU GDPR, Regulation (EU) 2016/679)",
+    "version": "2026.1",
+    "effective_date": "2018-05-25",
+    "penalty_summary": "위반 조항에 따라 최대 2,000만 유로 또는 전 세계 연간 총매출액의 4% 중 높은 금액(국외이전·기본원칙·정보주체 권리 등), 또는 최대 1,000만 유로 또는 전 세계 연간 총매출액의 2% 중 높은 금액(보안·설계기반 보호 등) 및 제3국 데이터 이전 중단 명령",
+    "adequacy_countries": [
+      "EU", "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
+      "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL",
+      "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO",
+      "AD", "AR", "CA", "CH", "FO", "GB", "GG", "IL", "IM", "JE",
+      "JP", "KR", "NZ", "UY"
+    ]
+  },
+  "applicability": {
+    "any": [
+      { "fact": "workspace.business_country", "operator": "equals", "value": "EU" },
+      { "fact": "workspace.data_subject_countries", "operator": "includes", "value": "EU" }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "EU-GDPR-44-46-1",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 44, Art. 45, Art. 46, Art. 49(1)",
+      "plain_title": "비적정성 제3국 국외이전 시 보호조치(SCC 등) 및 예외 근거 고지 누락 탐지",
+      "plain_explanation": "코드·인프라 설정에서 EU/EEA 및 적정성 결정 인정 국가 외 제3국 리전으로 개인정보(PII)가 전송되나, 개인정보 처리방침에서 표준계약조항(SCC)·구속력 있는 기업규칙(BCR) 등 적절한 보호조치 안내 및 별도 명시적 동의 절차가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+          {
+            "fact": "transfers.destination_countries",
+            "operator": "not_subset_of",
+            "value": [
+              "EU", "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR",
+              "DE", "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL",
+              "PL", "PT", "RO", "SK", "SI", "ES", "SE", "IS", "LI", "NO",
+              "AD", "AR", "CA", "CH", "FO", "GB", "GG", "IL", "IM", "JE",
+              "JP", "KR", "NZ", "UY"
+            ]
+          },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "includes_pii": true, "dpf_certified": false }
+          },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 처리방침은 EU/EEA 역내 처리만 명시하고 있으나 실제 코드·인프라에서 제3국 리전으로의 국외이전이 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 서비스 제공을 위해 귀하의 개인정보를 EU/EEA 역외 국가([입력 필요: 이전 국가명 및 수령인/수탁사명])로 이전할 수 있습니다. 해당 국가에 대한 EU 집행위원회의 적정성 결정이 존재하지 않는 경우, 당사는 GDPR 제46조에 따른 EU 표준계약조항(SCC) 등 적절한 보호조치를 체결하여 데이터를 보호합니다. 보호조치 사본은 [입력 필요: 열람 URL 또는 개인정보 문의 이메일]을 통해 요청·확인하실 수 있습니다.",
+        "infra_patch_hint": "클라우드 리전 및 외부 SaaS 데이터 레지던시를 EU/EEA 리전(예: AWS eu-central-1, eu-west-1) 또는 적정성 인정 국가로 이전하거나, 수탁사와 EU SCC 계약을 체결하고 전송 전 PII 마스킹/가명처리를 적용하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-45-US-DPF",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 45(1), Art. 46(2)",
+      "plain_title": "미국 리전 이전 시 EU-US DPF 미인증 벤더의 보호조치(SCC) 누락 탐지",
+      "plain_explanation": "개인정보(PII)를 미국(US) 리전에 저장·처리하는 벤더 중 EU-US 데이터 프라이버시 프레임워크(DPF) 인증이 확인되지 않은 벤더가 탐지되었으나, 처리방침에 SCC 등 대체 보호조치 또는 명시적 동의 근거가 기재되어 있지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "data_residency_country": "US", "includes_pii": true, "dpf_certified": false }
+          },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            { "fact": "transfers.destination_countries", "operator": "includes", "value": "US" }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 처리방침은 역외 이전 없음을 명시했으나 실제 미국(US) 리전 벤더로의 개인정보 전송이 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 [입력 필요: 미국 소재 수령인/수탁사명]을 통해 미국으로 개인정보를 이전하며, 해당 수령인이 EU-US Data Privacy Framework(DPF) 인증 대상이 아닌 경우 GDPR 제46조에 따른 EU 표준계약조항(SCC)을 적용합니다. 관련 보호조치 사본은 [입력 필요: 문의 이메일 또는 링크]에서 확인하실 수 있습니다.",
+        "infra_patch_hint": "해당 미국 벤더의 EU 리전 엔드포인트로 변경하거나, EU-US DPF 인증 벤더로 교체 또는 DPA/SCC 체결 후 처리방침에 보호조치를 명시하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-13-14-1",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 12(1), Art. 13, Art. 14",
+      "plain_title": "개인정보 처리방침 문서 미존재 탐지",
+      "plain_explanation": "EU 정보주체 대상 서비스에서 개인정보 수집 시점(직접 수집 Art. 13, 간접 수집 Art. 14)에 투명하게 제공해야 하는 개인정보 처리방침 문서가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "legal_doc.exists", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[입력 필요: 컨트롤러 법인명 및 연락처 / EU 대리인 연락처(해당 시) / DPO 연락처(해당 시)]는 GDPR 제13조 및 제14조에 따라 다음 사항을 안내합니다. 1) 처리 목적 및 법적 근거: [입력 필요] 2) 수령인 범주 및 제3국 이전 보호조치: [입력 필요] 3) 보유 기간 또는 결정 기준: [입력 필요] 4) 정보주체 권리(열람·정정·삭제·제한·반대·이동권·동의철회권·감독기관 불만제기권): [입력 필요]",
+        "infra_patch_hint": "서비스 푸터 및 회원가입·결제 화면 등 데이터 수집 시점에 쉽게 접근 가능한 URL로 개인정보 처리방침을 게시하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-13-1F-2",
+      "category": "DISCLOSURE",
+      "severity": "WARNING",
+      "article_citation": "GDPR Art. 13(1)(e)-(f), Art. 13(2)(a), Art. 14(1)(e)-(f), Art. 14(2)(a)",
+      "plain_title": "국외이전 수령인·이전 국가·보유기간·보호조치 필수 고지 항목 누락 탐지",
+      "plain_explanation": "개인정보(PII)의 국외이전이 탐지되었으나, 처리방침에 제3국 이전 국가, 수령인(벤더), 보유 기간 또는 보호조치(적정성 결정 유무·SCC 등) 고지 항목 중 하나 이상이 누락되어 문서와 인프라 간 정합성 불일치가 확인되었습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "legal_doc.exists", "operator": "equals", "value": true },
+          { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "includes_pii": true }
+          },
+          {
+            "any": [
+              { "fact": "legal_doc.disclosed_countries", "operator": "is_empty", "value": true },
+              { "fact": "legal_doc.disclosed_vendors", "operator": "is_empty", "value": true },
+              { "fact": "legal_doc.disclosed_retention_period", "operator": "equals", "value": false },
+              { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 처리방침에 국외이전 없음으로 표기되어 있으나 실제 제3국 벤더로의 개인정보 전송이 확인되었습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 [입력 필요: 처리 목적]을 위해 개인정보를 다음 수령인([입력 필요: 벤더/수탁사 목록]) 및 제3국([입력 필요: 이전 국가 목록])으로 이전합니다. 적용되는 보호조치는 [입력 필요: 적정성 결정 / EU SCC / BCR 및 사본 열람 경로]이며, 개인정보는 [입력 필요: 구체적 보유 기간 또는 결정 기준] 동안 보관 후 파기됩니다.",
+        "infra_patch_hint": "스캔된 외부 벤더 및 저장 리전 목록을 기반으로 처리방침의 수령인, 이전 국가, 보유 기간, 보호조치 섹션을 현행화하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-48-1",
+      "category": "VIRTUAL_TRANSFER",
+      "severity": "WARNING",
+      "article_citation": "GDPR Art. 44, Art. 48",
+      "plain_title": "역외 IAM 접근·KMS 키 통제에 따른 가상이전(원격 접근) 보호조치 누락 탐지",
+      "plain_explanation": "데이터가 물리적으로 EU 리전에 저장되어 있더라도 제3국 계정의 IAM 원격 접근 또는 역외 KMS 키 통제 권한이 활성화되어 있어 GDPR상 제3국 이전(가상이전) 및 제3국 당국 공개 리스크에 해당할 수 있으나, 관련 보호조치 고지가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true },
+              { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true }
+            ]
+          },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            {
+              "any": [
+                { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true },
+                { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true }
+              ]
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 처리방침은 EU 역내 한정 처리를 명시했으나 역외 IAM 원격 접근 또는 역외 KMS 키 통제 설정이 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "당사의 개인정보는 EU/EEA 리전에 저장되나, 시스템 운영·유지보수 목적의 원격 접근을 통해 [입력 필요: 접근 주체 국가명]에서 열람될 수 있습니다. 당사는 이러한 역외 접근에 대해 GDPR 제46조의 적절한 보호조치([입력 필요: SCC 등])를 적용하며, 제3국 당국의 제공 요청 시 GDPR 제48조에 따라 국제협정 근거 여부를 검토합니다.",
+        "infra_patch_hint": "역외 계정의 프로덕션 PII 접근 IAM 권한을 제거(최소 권한 원칙 및 조건부 IP/리전 제한 적용)하고, 고객 관리형 암호화 키(CMK/HYOK)를 EU 리전 내에서 독립 통제하도록 구성하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-6-7-21-1",
+      "category": "TRACKER_SHARING",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 6(1)(a), Art. 7, Art. 21(2), Art. 21(4)",
+      "plain_title": "분석 트래커·제3자 공유 SDK의 사전 동의(Opt-in) 및 거부권 고지 누락 탐지",
+      "plain_explanation": "코드에서 개인정보(온라인 식별자, 쿠키 등)를 수집·전송하는 분석 트래커 또는 제3자 공유 목적의 벤더가 탐지되었으나, 처리방침 및 동의 흐름에서 별도 사전 동의(Opt-in) 또는 상시 거부권(Opt-out)·동의 철회 방법 안내가 누락되었습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "category": "ANALYTICS", "includes_pii": true }
+              },
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "transfer_purpose": "THIRD_PARTY_SHARING", "includes_pii": true }
+              }
+            ]
+          },
+          {
+            "any": [
+              { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false },
+              { "fact": "legal_doc.disclosed_opt_out_method", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": { "category": "ANALYTICS", "includes_pii": true }
+            },
+            { "fact": "legal_doc.disclosed_vendors", "operator": "is_empty", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 프론트엔드·백엔드 코드에 개인정보 수집 트래커/분석 SDK가 탑재되어 있으나 처리방침에 수령인(벤더) 목록이 전혀 고지되지 않았습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 서비스 분석 및 맞춤형 마케팅을 위해 귀하의 명시적 사전 동의(GDPR 제6조 제1항 (a)호)를 받은 경우에 한하여 쿠키 및 분석 도구([입력 필요: 트래커/벤더 목록])를 활성화합니다. 귀하는 언제든지 [입력 필요: 쿠키 설정 센터 링크 또는 거부 방법]을 통해 동의를 철회하거나 직접 마케팅 목적의 프로파일링 처리를 거부할 수 있습니다.",
+        "infra_patch_hint": "CMP(Consent Management Platform)를 도입하여 사용자가 명시적으로 동의(Opt-in)하기 전에는 분석·광고 스크립트 실행을 차단(Prior Blocking)하고, 동의 철회 UI를 제공하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-9-1",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 9(1), Art. 9(2)(a), Art. 13(1)(c), Art. 13(2)(c)",
+      "plain_title": "헬스케어(특수범주 개인정보) 처리 시 명시적 동의·위탁 고지 및 수집 항목 누락 탐지",
+      "plain_explanation": "건강 정보 등 GDPR 제9조 특수범주 개인정보 처리 가능성이 높은 헬스케어 도메인에서 BAA 미지원 벤더로 개인정보가 전송되고 있으나, 별도 명시적 동의 및 처리위탁·수집 항목 고지가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "workspace.industry_domain", "operator": "equals", "value": "HEALTHCARE" },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "includes_pii": true, "baa_supported": false }
+          },
+          { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false },
+          {
+            "any": [
+              { "fact": "legal_doc.has_entrustment_disclosure", "operator": "equals", "value": false },
+              { "fact": "legal_doc.disclosed_items", "operator": "is_empty", "value": true }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "당사는 [입력 필요: 건강/생체 등 특수범주 개인정보 항목]을 GDPR 제9조 제2항 (a)호에 따른 귀하의 별도 명시적 동의([입력 필요: 또는 제9조 제2항 (h)호 등 법정 예외 근거])에 기반하여 [입력 필요: 구체적 처리 목적]을 위해서만 처리합니다. 귀하는 언제든지 [입력 필요: 동의 철회 경로]를 통해 동의를 철회할 수 있습니다.",
+        "infra_patch_hint": "특수범주 개인정보 수집 화면에 일반 약관과 분리된 별도 체크박스(명시적 동의)를 구현하고, BAA/DPA를 지원하는 수탁사를 사용하며 전송 전 불필요한 민감 필드를 제거·가명처리하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-22-1",
+      "category": "AI_GOVERNANCE",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 22(1)-(3), Art. 13(2)(f), Art. 14(2)(g)",
+      "plain_title": "외부 AI/LLM API 연동 시 데이터 학습 거부 및 자동화 의사결정 고지 누락 탐지",
+      "plain_explanation": "코드에서 개인정보(PII)를 Zero Data Retention(ZDR) 미보장 AI/LLM 벤더로 전송하고 있으나, 전송 전 PII 마스킹이 비활성화되어 있고 처리방침에 AI 학습 거부(Opt-out) 또는 자동화된 의사결정·거부권 안내가 누락되었습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI", "includes_pii": true, "zero_data_retention": false }
+          },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
+          {
+            "any": [
+              { "fact": "legal_doc.has_ai_training_opt_out_notice", "operator": "equals", "value": false },
+              { "fact": "legal_doc.disclosed_opt_out_method", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": { "category": "AI", "includes_pii": true }
+            },
+            { "fact": "legal_doc.disclosed_vendors", "operator": "is_empty", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 코드에서 외부 AI/LLM API로 개인정보가 전송되고 있으나 처리방침에 해당 AI 벤더가 고지되지 않았습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 [입력 필요: AI 기능 및 목적] 제공을 위해 [입력 필요: AI 벤더명]을 활용합니다. 자동화된 의사결정 또는 프로파일링이 귀하에게 법적 효력 또는 중대한 영향을 미치는 경우, 적용 로직의 핵심 정보와 예상 결과는 [입력 필요: 로직 및 영향 설명]과 같으며, 귀하는 [입력 필요: 인적 개입 요구·이의제기·AI 학습 거부 신청 경로]를 통해 권리를 행사할 수 있습니다.",
+        "infra_patch_hint": "AI API 호출 전 PII 마스킹/비식별화 미들웨어를 적용하고, AI 벤더의 Zero Data Retention(ZDR) 및 모델 학습 제외(Opt-out) 엔터프라이즈 설정을 활성화하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-25-32-1",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 25, Art. 32(1)(a)",
+      "plain_title": "개인정보 전송 구간(TLS) 또는 저장 시(KMS/AES) 암호화 미적용 탐지",
+      "plain_explanation": "개인정보(PII)를 처리·전송하는 인프라 설정에서 전송 구간 암호화(In-Transit) 또는 저장 데이터 암호화(At-Rest)가 비활성화된 상태가 탐지되어, GDPR 제25조(설계 및 기본설정에 의한 보호) 및 제32조(처리 안전성)의 기술적 보호조치 요건 점검이 필요합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "includes_pii": true }
+          },
+          {
+            "any": [
+              { "fact": "security.encryption_in_transit", "operator": "equals", "value": false },
+              { "fact": "security.encryption_at_rest", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "당사는 GDPR 제25조 및 제32조에 따라 개인정보의 기밀성·무결성·가용성을 보장하기 위해 전송 구간 암호화(TLS 1.2 이상), 저장 데이터 암호화(AES-256/KMS), 최소 권한 접근 통제 등 적절한 기술적·관리적 보호조치를 적용하고 있습니다. [입력 필요: 추가 보안 인증 내역]",
+        "infra_patch_hint": "모든 외부 API 통신에 HTTPS/TLS 1.2+를 강제하고, DB·스토리지 버킷(S3, RDS 등)의 저장 시 암호화(AES-256 또는 KMS CMK) 및 퍼블릭 액세스 차단을 활성화하세요."
+      }
+    }
+  ]
+}

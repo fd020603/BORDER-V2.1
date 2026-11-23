@@ -1,0 +1,456 @@
+{
+  "pack_meta": {
+    "id": "JP_APPI_v2",
+    "layer": 1,
+    "country_code": "JP",
+    "law_name": "일본 개인정보보호법 (JP_APPI)",
+    "version": "2026.1",
+    "effective_date": "2026-10-01",
+    "penalty_summary": "개인정보보호위원회(PPC) 시정명령 위반 시 개인 1년 이하의 구금형 또는 100만 엔 이하의 벌금(제178조), 법인 양벌규정에 따라 최대 1억 엔 이하의 벌금(제184조 제1항 제1호)",
+    "adequacy_countries": [
+      "JP",
+      "EU",
+      "GB",
+      "AT",
+      "BE",
+      "BG",
+      "HR",
+      "CY",
+      "CZ",
+      "DK",
+      "EE",
+      "FI",
+      "FR",
+      "DE",
+      "GR",
+      "HU",
+      "IE",
+      "IT",
+      "LV",
+      "LT",
+      "LU",
+      "MT",
+      "NL",
+      "PL",
+      "PT",
+      "RO",
+      "SK",
+      "SI",
+      "ES",
+      "SE",
+      "IS",
+      "LI",
+      "NO"
+    ]
+  },
+  "applicability": {
+    "any": [
+      {
+        "fact": "workspace.business_country",
+        "operator": "equals",
+        "value": "JP"
+      },
+      {
+        "fact": "workspace.data_subject_countries",
+        "operator": "includes",
+        "value": "JP"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "JP-APPI-17-21-32",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제17조, 제21조, 제32조 제1항",
+      "plain_title": "개인정보 처리방침 미게시 또는 보유개인데이터 필수 공표 항목 누락 탐지",
+      "plain_explanation": "웹사이트나 앱에 개인정보 처리방침이 존재하지 않거나, 이용목적·수집 항목·사업자 정보(명칭·주소·대표자 성명) 및 개시·정정·이용정지 청구 절차 등 법정 필수 고지 항목이 누락된 상태가 탐지되었습니다.",
+      "condition_dsl": {
+        "any": [
+          {
+            "fact": "legal_doc.exists",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.disclosed_items",
+            "operator": "is_empty",
+            "value": true
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[사업자 정보] 명칭: [입력 필요: 법인명], 주소: [입력 필요: 본사 주소], 대표자 성명: [입력 필요: 대표자명]\n[이용목적 및 수집 항목] 당사는 [입력 필요: 구체적 이용목적]을 위해 [입력 필요: 수집하는 개인정보 항목]을 취득·이용합니다.\n[보유개인데이터 청구 절차] 본인은 당사에 보유개인데이터의 개시, 정정, 이용정지 등을 청구할 수 있으며, 접수 창구 및 수수료는 [입력 필요: 문의처 및 수수료 안내]에 따릅니다.",
+        "infra_patch_hint": "서비스 하단(Footer) 및 회원가입·입력 폼 진입 화면에 일본어 개인정보 처리방침 링크를 상시 노출하고, 전자적 기록 취득 전 이용목적이 명시되도록 UI를 구성하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-28-1",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제28조 제1항·제3항",
+      "plain_title": "비적정성 국가로의 국외이전 시 사전 동의 및 상당조치 체제 고지 누락 탐지",
+      "plain_explanation": "일본 개인정보보호위원회(PPC) 적정성 인정국(일본·영국·EU/EEA) 외의 해외 리전 또는 외부 벤더로 개인데이터가 전송되고 있으나, 처리방침 및 UI에서 외국 제3자 제공 사전 동의 또는 상당조치 체제 정비에 관한 고지가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "transfers.destination_countries",
+            "operator": "not_subset_of",
+            "value": [
+              "JP",
+              "EU",
+              "GB",
+              "AT",
+              "BE",
+              "BG",
+              "HR",
+              "CY",
+              "CZ",
+              "DK",
+              "EE",
+              "FI",
+              "FR",
+              "DE",
+              "GR",
+              "HU",
+              "IE",
+              "IT",
+              "LV",
+              "LT",
+              "LU",
+              "MT",
+              "NL",
+              "PL",
+              "PT",
+              "RO",
+              "SK",
+              "SI",
+              "ES",
+              "SE",
+              "IS",
+              "LI",
+              "NO"
+            ]
+          },
+          {
+            "fact": "legal_doc.has_separate_consent",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.has_scc_or_safeguard_notice",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.claims_domestic_only",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "fact": "transfers.has_cross_border",
+              "operator": "equals",
+              "value": true
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 처리방침에는 개인정보를 국내에서만 처리·보관한다고 기재되어 있으나, 실제 인프라 설정에서 해외 리전 또는 외국 벤더로의 데이터 전송이 확인되었습니다."
+      },
+      "remediation": {
+        "legal_template": "[외국 소재 제3자 제공 안내] 당사는 [입력 필요: 이전 국가명] 소재 [입력 필요: 수탁사/제3자 명칭]에 개인데이터를 제공합니다. 당사는 사전에 본인의 동의를 얻거나, 일본 개인정보보호법 제28조 제3항에 따른 상당조치 체제를 정비한 사업자와 계약을 체결하고 지속적인 이행 여부를 감독합니다. 본인은 당사에 해당 조치에 관한 정보 제공을 요청할 수 있습니다.",
+        "infra_patch_hint": "해외 리전(data_residency_country)을 일본 리전(예: ap-northeast-1)으로 이전하거나, 비적정성 국가 전송 전 명시적 동의 체크박스 및 상당조치(DPA/SCC 등) 고지 문구를 반영하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-28-2",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제28조 제2항",
+      "plain_title": "국외이전 동의 취득 시 수신국 개인정보보호 법제 정보 고지 누락 탐지",
+      "plain_explanation": "상당조치 체제 정비자 예외를 적용하지 않고 비적정성 국가로 개인데이터를 이전하는 구성이 탐지되었으나, 처리방침에 이전 대상 국가의 개인정보보호 제도 및 수신 측 제3자가 강구하는 보호조치에 관한 참고 정보 고지가 누락되어 있습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "transfers.destination_countries",
+            "operator": "not_subset_of",
+            "value": [
+              "JP",
+              "EU",
+              "GB",
+              "AT",
+              "BE",
+              "BG",
+              "HR",
+              "CY",
+              "CZ",
+              "DK",
+              "EE",
+              "FI",
+              "FR",
+              "DE",
+              "GR",
+              "HU",
+              "IE",
+              "IT",
+              "LV",
+              "LT",
+              "LU",
+              "MT",
+              "NL",
+              "PL",
+              "PT",
+              "RO",
+              "SK",
+              "SI",
+              "ES",
+              "SE",
+              "IS",
+              "LI",
+              "NO"
+            ]
+          },
+          {
+            "fact": "legal_doc.has_scc_or_safeguard_notice",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.disclosed_dest_country_law_info",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[이전 대상국 법제 및 보호조치 정보]\n1. 이전 대상 국가명: [입력 필요: 국가명]\n2. 해당 국가의 개인정보보호 제도: [입력 필요: 일본 개인정보보호위원회(PPC) 공표 법제 조사 링크 또는 요약]\n3. 제3자가 강구하는 보호조치: [입력 필요: OECD 프라이버시 8원칙 준수 여부, ISO 27001/SOC 2 등 인증 현황]",
+        "infra_patch_hint": "국외이전 동의 화면 및 처리방침 내에 수신국별 개인정보보호 법제 요약 또는 일본 PPC 공식 조사 결과 링크를 추가하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-27-1",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제27조 제1항·제2항·제5항",
+      "plain_title": "제3자 제공(위탁 제외) 시 사전 동의 또는 옵트아웃 고지 누락 탐지",
+      "plain_explanation": "처리위탁(ENTRUSTMENT)이 아닌 제3자 제공(THIRD_PARTY_SHARING) 목적의 외부 벤더로 개인정보가 전송되고 있으나, 처리방침 및 동의 UI에서 사전 동의 획득 또는 옵트아웃(제공 정지 청구) 절차 고지가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": {
+              "includes_pii": true,
+              "transfer_purpose": "THIRD_PARTY_SHARING"
+            }
+          },
+          {
+            "fact": "legal_doc.has_separate_consent",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.disclosed_opt_out_method",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[제3자 제공에 관한 사항] 당사는 [입력 필요: 제공 목적]을 위해 [입력 필요: 제공 항목]을 [입력 필요: 제3자 명칭]에 제공합니다. 본인은 사전에 이에 동의하거나, 옵트아웃 특례 적용 시 [입력 필요: 제공 정지 접수 창구]를 통해 제3자 제공 정지를 요구할 수 있습니다.",
+        "infra_patch_hint": "해당 벤더 연동이 단순 처리위탁(ENTRUSTMENT)인 경우 위탁 계약(DPA)을 체결하고 목적을 재분류하며, 제3자 제공인 경우 사전 동의 체크박스 또는 옵트아웃 설정 UI를 구현하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-31",
+      "category": "TRACKER_SHARING",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제31조",
+      "plain_title": "트래커·개인관련정보 외부 전송 시 동의·거부권 및 외국 법제 고지 누락 탐지",
+      "plain_explanation": "외부 분석·광고 트래커(ANALYTICS)로 개인관련정보(쿠키·광고 ID 등)가 전송되는 구성이 탐지되었으나, 수신 측의 개인데이터 결합 취득에 대한 본인 동의 확인, 거부권(Opt-out) 안내 또는 해외 전송 시 수신국 법제 고지가 누락되어 있습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": {
+                  "category": "ANALYTICS",
+                  "includes_pii": true,
+                  "transfer_purpose": "ANALYTICS"
+                }
+              },
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": {
+                  "category": "ANALYTICS",
+                  "includes_pii": true,
+                  "transfer_purpose": "THIRD_PARTY_SHARING"
+                }
+              }
+            ]
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.has_separate_consent",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_opt_out_method",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "all": [
+                  {
+                    "fact": "transfers.has_cross_border",
+                    "operator": "equals",
+                    "value": true
+                  },
+                  {
+                    "fact": "legal_doc.disclosed_dest_country_law_info",
+                    "operator": "equals",
+                    "value": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[개인관련정보(쿠키·광고 ID 등)의 제3자 제공] 당사는 서비스 분석 및 맞춤형 광고 제공을 위해 [입력 필요: 트래커/벤더명]에 쿠키 및 식별자 정보를 전송합니다. 제공받는 제3자가 이를 개인데이터로 취득하는 경우 사전에 본인의 동의를 확인하며, 해외 사업자 제공 시 해당 국가의 개인정보보호 제도를 안내합니다. 이용자는 [입력 필요: 쿠키 설정/거부 링크]에서 전송을 거부할 수 있습니다.",
+        "infra_patch_hint": "index.html 등에 삽입된 분석·광고 스크립트 실행 전 쿠키 동의 배너(CMP)를 연동하여 동의 시에만 트래커가 로드되도록 제어하고, 거부권 설정 기능을 제공하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-23-25",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제23조, 제25조",
+      "plain_title": "개인데이터 전송·저장 암호화 미비 또는 해외 IAM·KMS 접근 통제 미흡 탐지",
+      "plain_explanation": "개인데이터의 전송 구간 암호화(TLS) 또는 저장 시 암호화(Encryption at Rest)가 비활성화되어 있거나, 해외 IAM 접근 및 KMS 키 제어 권한이 존재함에도 적절한 안전관리조치 및 보호조치 고지가 확인되지 않았습니다.",
+      "condition_dsl": {
+        "any": [
+          {
+            "fact": "security.encryption_in_transit",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "security.encryption_at_rest",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "all": [
+              {
+                "fact": "transfers.virtual_transfer.foreign_iam_access",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.has_scc_or_safeguard_notice",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "fact": "transfers.virtual_transfer.foreign_kms_control",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.has_scc_or_safeguard_notice",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[안전관리조치에 관한 사항] 당사는 개인데이터의 유출·멸실·훼손을 방지하기 위해 전송 구간 및 저장 데이터 암호화, 접근 권한 최소화(IAM), 암호화 키 관리(KMS) 등 기술적 안전관리조치를 시행하며, 외부 수탁사에 대해서도 [입력 필요: 수탁사 감독 및 점검 주기]에 따라 필요하고 적절한 감독을 실시합니다.",
+        "infra_patch_hint": "모든 API 엔드포인트에 TLS 1.2 이상을 강제하고, DB 및 스토리지 버킷의 저장 암호화(AES-256/KMS)를 활성화하세요. 해외 계정의 IAM/KMS 접근 권한을 최소화하고 접근 통제 정책을 문서화하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-20-2",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제20조 제2항",
+      "plain_title": "헬스케어 도메인 요배려개인정보 취득 시 사전 별도 동의 누락 탐지",
+      "plain_explanation": "병력 등 요배려개인정보(민감정보)를 취급하는 HEALTHCARE 도메인 환경으로 탐지되었으나, 처리방침 및 수집 화면에서 요배려개인정보 취득에 관한 사전 별도 동의 구성이 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "workspace.industry_domain",
+            "operator": "equals",
+            "value": "HEALTHCARE"
+          },
+          {
+            "fact": "legal_doc.has_separate_consent",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[요배려개인정보의 취득 및 동의] 당사는 [입력 필요: 건강관리/진료 지원 등 구체적 이용목적]을 위해 본인의 병력 등 요배려개인정보([입력 필요: 세부 항목])를 취득합니다. 해당 정보는 법령상 예외에 해당하는 경우를 제외하고 사전에 본인의 명시적 동의를 얻은 경우에만 취득·이용합니다.",
+        "infra_patch_hint": "병력·건강정보 등 민감 필드를 입력받는 UI 직전에 일반 약관 동의와 분리된 별도의 체크박스(사전 명시적 동의)를 구현하고, 동의 이력을 DB에 기록하세요."
+      }
+    }
+  ]
+}

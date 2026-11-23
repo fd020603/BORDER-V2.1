@@ -1,0 +1,607 @@
+{
+  "pack_meta": {
+    "id": "KR_PIPA_v2",
+    "layer": 1,
+    "country_code": "KR",
+    "law_name": "개인정보 보호법 (KR_PIPA)",
+    "version": "2026.1",
+    "effective_date": "2026-09-11",
+    "penalty_summary": "전체 매출액의 3% 이하 과징금(고의·중과실 3년 내 재위반 또는 1천만명 이상 피해 시 10% 이하), 최대 5년 이하 징역 또는 5천만원 이하 벌금, 최대 5천만원 이하 과태료",
+    "adequacy_countries": []
+  },
+  "applicability": {
+    "any": [
+      {
+        "fact": "workspace.business_country",
+        "operator": "equals",
+        "value": "KR"
+      },
+      {
+        "fact": "workspace.data_subject_countries",
+        "operator": "includes",
+        "value": "KR"
+      }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "KR-PIPA-28-8-1-CONSENT",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제28조의8 제1항 제1호·제2항, 제28조의11",
+      "plain_title": "국외 제3자 제공(공유) 시 별도 동의 및 법정 고지 항목 누락 탐지",
+      "plain_explanation": "코드·인프라 설정상 개인정보가 포함된 데이터가 대한민국(KR) 외 리전으로 제3자 제공(공유)되는 흐름이 탐지되었으나, 개인정보 처리방침 및 동의 체계에서 국외 이전 별도 동의 또는 법정 필수 고지 항목(이전 국가·항목·시기·방법·보유기간·거부 방법 등)이 확인되지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "transfers.destination_countries",
+            "operator": "not_subset_of",
+            "value": ["KR"]
+          },
+          {
+            "fact": "security.pii_masked_before_transfer",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": {
+              "includes_pii": true,
+              "transfer_purpose": "THIRD_PARTY_SHARING"
+            }
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.has_separate_consent",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_countries",
+                "operator": "is_empty",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.disclosed_items",
+                "operator": "is_empty",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.disclosed_method_and_time",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_retention_period",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_opt_out_method",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.claims_domestic_only",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "fact": "transfers.has_cross_border",
+              "operator": "equals",
+              "value": true
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 처리방침은 개인정보의 국내 처리·보관만을 명시하고 있으나, 실제 코드 및 인프라 설정에서 해외 리전으로의 개인정보 제3자 제공 흐름이 확인되었습니다."
+      },
+      "remediation": {
+        "legal_template": "[국외 이전 별도 동의 안내]\n1. 이전되는 개인정보 항목: [입력 필요: 구체적 개인정보 항목]\n2. 이전되는 국가, 시기 및 방법: [입력 필요: 이전 국가명], [입력 필요: 이전 시점]에 [입력 필요: 네트워크 전송 방식]\n3. 이전받는 자의 명칭 및 연락처: [입력 필요: 해외 수령 법인명 및 개인정보보호 담당 연락처]\n4. 이전받는 자의 이용목적 및 보유·이용 기간: [입력 필요: 이용목적] / [입력 필요: 보유·이용 기간]\n5. 국외 이전 거부 방법, 절차 및 거부의 효과: [입력 필요: 거부 경로 및 서비스 이용 제한 여부]",
+        "infra_patch_hint": "해외 제3자 API/SDK 호출 전 별도 국외 이전 동의 플래그를 검증하는 게이트를 추가하거나, 전송 전 개인정보를 비식별·마스킹 처리하고 가능하면 국내(ap-northeast-2 등 KR) 리전 엔드포인트로 전환하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-28-8-3-ENTRUSTMENT",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제28조의8 제1항 제3호·제2항",
+      "plain_title": "국외 처리위탁·보관 특례 적용을 위한 처리방침 필수 고지 항목 누락 탐지",
+      "plain_explanation": "계약 체결·이행을 위한 해외 클라우드·SaaS 처리위탁 또는 보관(data_residency_country가 KR 외)이 탐지되었습니다. 별도 동의 면제 특례(제28조의8 제1항 제3호)를 적용하려면 개인정보 처리방침에 이전 항목·국가·시기·방법·수탁자 연락처·보유기간·거부 방법을 모두 공개해야 하나 일부 항목이 누락되어 있습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "transfers.destination_countries",
+            "operator": "not_subset_of",
+            "value": ["KR"]
+          },
+          {
+            "fact": "security.pii_masked_before_transfer",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": {
+              "includes_pii": true,
+              "transfer_purpose": "ENTRUSTMENT"
+            }
+          },
+          {
+            "fact": "legal_doc.has_separate_consent",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.exists",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.has_entrustment_disclosure",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_countries",
+                "operator": "is_empty",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.disclosed_vendors",
+                "operator": "is_empty",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.disclosed_items",
+                "operator": "is_empty",
+                "value": true
+              },
+              {
+                "fact": "legal_doc.disclosed_method_and_time",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_retention_period",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_opt_out_method",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.claims_domestic_only",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "fact": "transfers.has_cross_border",
+              "operator": "equals",
+              "value": true
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 처리방침은 국내 보관·처리만을 안내하고 있으나, 실제 클라우드·SaaS 연동 설정에서 해외 리전으로의 처리위탁·보관이 확인되었습니다."
+      },
+      "remediation": {
+        "legal_template": "[개인정보의 국외 처리위탁·보관 안내(계약 이행 특례)]\n회사는 서비스 제공 계약의 이행을 위하여 아래와 같이 개인정보 처리를 국외에 위탁·보관하고 있습니다.\n- 수탁자(법인명 및 연락처): [입력 필요: 해외 클라우드/SaaS 법인명 및 연락처]\n- 이전되는 국가: [입력 필요: 실제 데이터 저장 리전 국가]\n- 이전되는 개인정보 항목: [입력 필요: 위탁·보관 항목]\n- 이전 시기 및 방법: [입력 필요: 서비스 이용 시 암호화 네트워크 전송]\n- 위탁 업무 내용 및 보유·이용 기간: [입력 필요: 클라우드 인프라 보관 등 업무 내용 및 기간]\n- 국외 이전 거부 방법 및 효과: [입력 필요: 회원탈퇴 또는 고객센터 요청 절차 및 거부 시 서비스 이용 제한 안내]",
+        "infra_patch_hint": "해외 리전(data_residency_country)을 사용하는 클라우드·SaaS 리소스를 서울(KR) 리전으로 이전하거나, 실제 사용 중인 모든 해외 수탁사·리전 목록을 처리방침에 동기화하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-28-8-VIRTUAL-ACCESS",
+      "category": "VIRTUAL_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제28조의8 제1항(국외 조회 포함)",
+      "plain_title": "해외 IAM 접근 또는 해외 KMS 키 통제에 따른 국외 가상이전 고지·동의 누락 탐지",
+      "plain_explanation": "데이터가 국내 리전에 저장되어 있더라도 해외 계정(IAM)의 원격 조회 권한이나 해외 KMS 키 통제 설정이 존재하면 개인정보 보호법상 국외 이전(조회 포함)에 해당할 수 있으나, 이에 대한 국외 이전 별도 동의 또는 처리위탁 고지가 확인되지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              {
+                "fact": "transfers.virtual_transfer.foreign_iam_access",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "fact": "transfers.virtual_transfer.foreign_kms_control",
+                "operator": "equals",
+                "value": true
+              }
+            ]
+          },
+          {
+            "fact": "security.pii_masked_before_transfer",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.has_separate_consent",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.has_entrustment_disclosure",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.claims_domestic_only",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "any": [
+                {
+                  "fact": "transfers.virtual_transfer.foreign_iam_access",
+                  "operator": "equals",
+                  "value": true
+                },
+                {
+                  "fact": "transfers.virtual_transfer.foreign_kms_control",
+                  "operator": "equals",
+                  "value": true
+                }
+              ]
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 처리방침은 국내 한정 처리를 표방하고 있으나, 실제 클라우드 IAM/KMS 설정상 국외 원격 조회 또는 암호화 키 통제 경로가 열려 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[국외 원격 조회(가상이전) 안내]\n회사는 시스템 유지보수 및 기술 지원을 위하여 국외 소재 담당자 또는 수탁자가 국내 저장 개인정보를 원격 조회할 수 있습니다.\n- 조회 주체(법인명 및 연락처): [입력 필요: 해외 법인명 및 연락처]\n- 조회 국가 및 방법: [입력 필요: 국가명], [입력 필요: VPN/보안 채널 원격 접속]\n- 조회 항목·목적·보유기간 및 거부 방법: [입력 필요: 항목, 목적, 기간, 거부 절차]",
+        "infra_patch_hint": "IAM 정책에서 해외 IP/계정의 운영 DB 조회 권한을 차단하고 KMS 키 관리 권한을 국내 리전·국내 법인 전용 계정으로 격리하거나, 해외 지원 인력 접근 시 PII 마스킹 뷰만 허용하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-28-8-4-SAFEGUARD",
+      "category": "SECURITY",
+      "severity": "WARNING",
+      "article_citation": "개인정보 보호법 제28조의8 제4항",
+      "plain_title": "국외 이전 시 법정 보호조치(전송 암호화·보호조치 고지) 미확인 탐지",
+      "plain_explanation": "국외 이전이 수행되는 환경에서 전송 구간 암호화 설정이 비활성화되어 있거나, 처리방침 내 국외 이전 시 적용되는 계약적·기술적 보호조치(안전조치·권리보장 등) 안내가 누락되어 정합성 점검이 필요합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "security.pii_masked_before_transfer",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "any": [
+              {
+                "fact": "security.encryption_in_transit",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.has_scc_or_safeguard_notice",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[국외 이전 개인정보 보호조치 안내]\n회사는 개인정보를 국외로 이전하는 경우 개인정보 보호법 제28조의8 제4항에 따라 전송 구간 암호화(TLS 1.2 이상), 접근 통제 및 수탁자·수령인과의 개인정보 보호 계약(DPA 등)을 통해 안전성 확보조치 및 정보주체 권리보장 조치를 이행하고 있습니다. [입력 필요: 추가 보호조치 및 고충처리 연락처]",
+        "infra_patch_hint": "모든 해외 API·클라우드 연동 구간에 TLS 1.2 이상 암호화 통신을 강제하고, 이전받는 해외 벤더와 개인정보 보호조치 조항이 포함된 계약을 문서화하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-17-30-TRACKER",
+      "category": "TRACKER_SHARING",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제17조 제1항·제2항, 제30조 제1항 제7호",
+      "plain_title": "웹·앱 분석/광고 트래커 개인정보 공유 및 자동수집장치 거부 방법 누락 탐지",
+      "plain_explanation": "프론트엔드 또는 SDK 코드에 개인정보(식별자·행태정보 등)를 수집·전송하는 분석·광고 트래커가 탑재되어 있으나, 처리방침 내 제3자 제공 동의 체계 또는 쿠키·자동수집장치 설치·운영 및 거부 방법 고지가 확인되지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": {
+                  "category": "ANALYTICS",
+                  "includes_pii": true,
+                  "transfer_purpose": "THIRD_PARTY_SHARING"
+                }
+              },
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": {
+                  "category": "ANALYTICS",
+                  "includes_pii": true,
+                  "transfer_purpose": "ANALYTICS"
+                }
+              }
+            ]
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.disclosed_opt_out_method",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_vendors",
+                "operator": "is_empty",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.disclosed_vendors",
+              "operator": "is_empty",
+              "value": true
+            },
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": {
+                "category": "ANALYTICS",
+                "includes_pii": true
+              }
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 실제 코드에는 분석·광고 트래커 스크립트(SDK)가 연동되어 개인정보를 전송하고 있으나, 처리방침에 해당 외부 제공·수탁 벤더 목록이 기재되어 있지 않습니다."
+      },
+      "remediation": {
+        "legal_template": "[개인정보 자동수집장치(쿠키 등) 설치·운영 및 거부 안내]\n1. 자동수집장치 사용 목적: [입력 필요: 이용자 분석, 맞춤형 서비스 제공 등]\n2. 설치·운영 거부 방법: 웹 브라우저 설정(도구 > 인터넷 옵션 > 개인정보) 또는 앱 내 설정 메뉴([입력 필요: 구체적 거부 경로])를 통해 수집을 거부할 수 있습니다.\n3. 제3자 제공/분석 도구 현황: [입력 필요: 사용 중인 분석·광고 벤더명, 제공 항목, 보유기간]",
+        "infra_patch_hint": "index.html 및 앱 초기화 코드에서 이용자의 사전 동의 또는 옵트아웃 설정 상태를 확인한 뒤 트래커 스크립트를 로드하도록 수정하고, PII 식별자가 트래커 페이로드에 평문으로 포함되지 않도록 마스킹하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-26-2-ENTRUSTMENT-LIST",
+      "category": "DISCLOSURE",
+      "severity": "WARNING",
+      "article_citation": "개인정보 보호법 제26조 제2항, 제30조 제1항 제4호",
+      "plain_title": "외부 수탁사 연동 대비 처리방침 내 위탁 업무·수탁자 공개 누락 탐지",
+      "plain_explanation": "코드·인프라에 개인정보를 처리하는 외부 위탁 벤더(클라우드·결제·알림·인증 등)가 연동되어 있으나, 개인정보 처리방침에 위탁 업무의 내용 및 수탁자(재수탁자 포함) 목록이 공개되어 있지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": {
+              "includes_pii": true,
+              "transfer_purpose": "ENTRUSTMENT"
+            }
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.has_entrustment_disclosure",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_vendors",
+                "operator": "is_empty",
+                "value": true
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "legal_doc.exists",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "fact": "legal_doc.disclosed_vendors",
+              "operator": "is_empty",
+              "value": true
+            },
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": {
+                "includes_pii": true,
+                "transfer_purpose": "ENTRUSTMENT"
+              }
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 코드·인프라에서 외부 수탁사 연동이 탐지되었으나, 게시된 개인정보 처리방침에는 수탁자 목록이 비어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[개인정보 처리업무의 위탁에 관한 사항]\n회사는 원활한 서비스 제공을 위하여 다음과 같이 개인정보 처리업무를 위탁하고 있습니다.\n- 수탁자(재수탁자 포함): [입력 필요: 수탁사 법인명]\n- 위탁하는 업무의 내용: [입력 필요: 클라우드 호스팅, 결제 처리, 문자 발송 등 구체적 업무 내용]",
+        "infra_patch_hint": "package.json 및 인프라 설정 파일에서 개인정보를 처리하는 모든 외부 SaaS·클라우드 벤더 목록을 추출하여 개인정보 처리방침의 위탁 현황표와 주기적으로 동기화하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-30-1-POLICY-ESSENTIALS",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제30조 제1항·제2항",
+      "plain_title": "개인정보 처리방침 미게시 또는 핵심 법정 기재사항(처리 항목·보유기간) 누락 탐지",
+      "plain_explanation": "서비스 내 개인정보 처리방침 문서가 존재하지 않거나, 법정 필수 고지 항목인 처리하는 개인정보 항목 및 보유·이용 기간 기재가 확인되지 않습니다.",
+      "condition_dsl": {
+        "any": [
+          {
+            "fact": "legal_doc.exists",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "legal_doc.disclosed_items",
+            "operator": "is_empty",
+            "value": true
+          },
+          {
+            "fact": "legal_doc.disclosed_retention_period",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[개인정보 처리방침 기본 기재사항]\n1. 개인정보의 처리 목적: [입력 필요: 서비스 제공, 회원 관리 등]\n2. 처리하는 개인정보 항목(동의 항목과 동의 없는 처리 항목 구분): [입력 필요: 필수/선택 항목 및 법적 근거]\n3. 개인정보의 처리 및 보유 기간: [입력 필요: 목적 달성 시 또는 법령상 보존기간]\n4. 파기절차 및 방법: [입력 필요: 전자적 파일 복구 불가 삭제 절차]\n5. 정보주체·법정대리인 권리·행사방법 및 개인정보 보호책임자/고충처리 부서 연락처: [입력 필요: 성명/부서명 및 연락처]",
+        "infra_patch_hint": "웹·앱 첫 화면(푸터 또는 설정 화면)에서 정보주체가 쉽게 확인할 수 있는 경로에 개인정보 처리방침 페이지를 배포하고, DB 보유기간(TTL) 정책과 문서상 보유기간을 일치시키세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-29-ENCRYPTION",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제29조, 제24조 제3항, 제24조의2 제2항",
+      "plain_title": "안전조치의무 핵심 설정(전송 구간·저장 구간 암호화) 미적용 탐지",
+      "plain_explanation": "인프라·코드 설정 점검 결과 전송 구간 암호화(HTTPS/TLS) 또는 저장 구간 암호화(DB/스토리지 KMS 암호화)가 비활성화된 상태가 탐지되었습니다. 고유식별정보·주민등록번호 등 개인정보의 안전성 확보조치 정합성 점검이 필요합니다.",
+      "condition_dsl": {
+        "any": [
+          {
+            "fact": "security.encryption_in_transit",
+            "operator": "equals",
+            "value": false
+          },
+          {
+            "fact": "security.encryption_at_rest",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[개인정보의 안전성 확보조치 안내]\n회사는 개인정보 보호법 제29조에 따라 개인정보 전송 구간 암호화(TLS), 주요 개인정보 및 고유식별정보의 저장 구간 암호화(AES-256 등), 접근권한 관리 및 접속기록 보관 등 기술적·관리적 보호조치를 이행하고 있습니다. [입력 필요: 구체적 보안 조치 현황]",
+        "infra_patch_hint": "로드밸런서·API 게이트웨이에서 HTTP를 HTTPS(TLS 1.2+)로 강제 리다이렉트하고, RDS·S3·GCS 등 모든 개인정보 저장 리소스에 KMS 기반 저장 암호화(Encryption at Rest)를 활성화하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-37-2-AI-NOTICE",
+      "category": "AI_GOVERNANCE",
+      "severity": "WARNING",
+      "article_citation": "개인정보 보호법 제37조의2 제1항~제4항, 제28조의12(2027.3.9. 시행 예정)",
+      "plain_title": "AI 벤더 개인정보 전송 시 모델 학습 제외(Zero Data Retention) 미설정 및 거부·절차 고지 누락 탐지",
+      "plain_explanation": "개인정보가 포함된 데이터가 Zero Data Retention(학습 미사용)이 보장되지 않는 외부 AI 벤더로 전송되는 설정이 탐지되었으나, 처리방침에 AI 학습·자동화된 결정에 대한 처리 방식 및 거부(Opt-out) 안내가 확인되지 않습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": {
+              "category": "AI",
+              "includes_pii": true,
+              "zero_data_retention": false
+            }
+          },
+          {
+            "any": [
+              {
+                "fact": "legal_doc.has_ai_training_opt_out_notice",
+                "operator": "equals",
+                "value": false
+              },
+              {
+                "fact": "legal_doc.disclosed_opt_out_method",
+                "operator": "equals",
+                "value": false
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": {
+                "category": "AI",
+                "includes_pii": true,
+                "zero_data_retention": false
+              }
+            },
+            {
+              "fact": "legal_doc.has_ai_training_opt_out_notice",
+              "operator": "equals",
+              "value": false
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 코드에서 Zero Data Retention이 비활성화된 AI 벤더로 개인정보가 전송되고 있으나, 처리방침에는 AI 학습 이용 여부 및 거부(Opt-out) 안내가 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[인공지능 처리 및 자동화된 결정에 관한 안내]\n1. 자동화된 결정(AI)의 기준·절차 및 개인정보 처리 방식: [입력 필요: AI 기능 적용 범위 및 입력 데이터 처리 방식]\n2. AI 모델 학습 활용 여부 및 거부(Opt-out)·설명 요구 방법: 정보주체는 [입력 필요: 서비스 내 설정 경로 또는 고객센터 연락처]를 통해 자동화된 결정에 대한 거부·설명 요구 및 AI 학습 활용 제외를 요청할 수 있습니다.",
+        "infra_patch_hint": "외부 AI API 벤더 설정에서 Zero Data Retention(데이터 학습 제외) 옵션을 활성화하거나, AI 프롬프트·요청 페이로드 전송 전 PII 마스킹 필터를 적용하세요."
+      }
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Border Checker v2.0",
+  "description": "AI-Native Data Sovereignty & Policy-Infra Drift Linter for cross-border personal data compliance.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

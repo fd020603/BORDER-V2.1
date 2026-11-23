@@ -1,0 +1,177 @@
+{
+  "pack_meta": {
+    "id": "EU_AI_ACT_v2",
+    "layer": 4,
+    "country_code": "EU",
+    "law_name": "유럽연합 인공지능법 (EU Artificial Intelligence Act, Regulation (EU) 2024/1689)",
+    "version": "2026.1",
+    "effective_date": "2026-08-02",
+    "penalty_summary": "투명성·배포자·보안 의무 위반 시 최대 1,500만 유로 또는 전 세계 연매출 3% 중 높은 금액 (SME·스타트업·SMC는 둘 중 낮은 금액, 제99조)",
+    "adequacy_countries": []
+  },
+  "applicability": {
+    "all": [
+      {
+        "any": [
+          { "fact": "workspace.business_country", "operator": "equals", "value": "EU" },
+          { "fact": "workspace.data_subject_countries", "operator": "includes", "value": "EU" }
+        ]
+      },
+      {
+        "any": [
+          { "fact": "workspace.industry_domain", "operator": "equals", "value": "AI_SAAS" },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI" }
+          }
+        ]
+      }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "EU-AI-50-TRANSPARENCY",
+      "category": "AI_GOVERNANCE",
+      "severity": "BLOCKER",
+      "article_citation": "Regulation (EU) 2024/1689 제50조(1), (4), (5) 및 제2조(7)",
+      "plain_title": "외부 AI API 연동 대비 처리방침 내 AI 활용·학습 거부(Opt-out) 고지 누락 탐지",
+      "plain_explanation": "코드·인프라 설정에서 개인정보(PII)가 포함된 외부 AI API 벤더 연동이 탐지되었으나, 개인정보 처리방침 문서에서 AI 시스템 활용·생성물 고지 및 AI 모델 학습 거부(Opt-out) 안내 항목이 확인되지 않았습니다. EU AI법 제50조 및 GDPR 연계 규정에 따라 최초 상호작용 시점까지 AI 활용 사실과 학습 거부 절차를 명확히 안내해야 합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI", "includes_pii": true }
+          },
+          {
+            "fact": "legal_doc.has_ai_training_opt_out_notice",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.exists", "operator": "equals", "value": true },
+            { "fact": "legal_doc.has_ai_training_opt_out_notice", "operator": "equals", "value": false },
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": { "category": "AI", "includes_pii": true }
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 실제 코드에 외부 AI API가 연동되어 있으나, 게시된 처리방침 문서에 AI 활용 고지 및 모델 학습 거부(Opt-out) 안내가 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[AI 시스템 활용 및 투명성 고지]\n1. 당사는 [입력 필요: AI 기능 명칭(예: AI 챗봇, 콘텐츠 생성 기능)] 제공을 위해 외부 인공지능 API([입력 필요: AI 벤더명])를 활용하고 있으며, 이용자가 AI와 상호작용하거나 AI가 생성·조작한 콘텐츠를 열람하는 경우 최초 시점에 이를 명확히 표시합니다.\n2. 이용자의 입력 데이터는 [입력 필요: AI 모델 학습 활용 여부 및 미활용 시 Zero Data Retention 적용 사실]에 따라 처리됩니다.\n3. 이용자는 언제든지 [입력 필요: 학습 거부(Opt-out) 설정 경로 또는 문의 이메일]을 통해 AI 모델 학습 목적의 데이터 활용을 거부할 수 있습니다.",
+        "infra_patch_hint": "챗봇·생성형 AI UI 최초 진입 화면에 'AI 기반 응답/생성물' 배지를 추가하고, 처리방침에 AI 활용 및 학습 거부(Opt-out) 조항을 반영하세요."
+      }
+    },
+    {
+      "rule_id": "EU-AI-26-4-INPUT-DATA",
+      "category": "AI_GOVERNANCE",
+      "severity": "BLOCKER",
+      "article_citation": "Regulation (EU) 2024/1689 제26조(4) 및 제2조(7)",
+      "plain_title": "비보관(ZDR) 미지원 AI 벤더로 비마스킹 개인정보(PII) 전송 설정 탐지",
+      "plain_explanation": "데이터 비보관(Zero Data Retention)이 보장되지 않는 외부 AI 벤더로 개인정보(PII)를 전송하면서, 전송 전 PII 마스킹·비식별화 처리가 비활성화된 상태가 탐지되었습니다. 배포자(Deployer)의 입력 데이터 통제 및 GDPR 최소수집 원칙에 부합하도록 ZDR 계약을 적용하거나 전송 전 비식별화 파이프라인을 구성해야 합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI", "includes_pii": true, "zero_data_retention": false }
+          },
+          {
+            "fact": "security.pii_masked_before_transfer",
+            "operator": "equals",
+            "value": false
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[외부 AI 벤더 입력 데이터 처리 안내]\n당사는 외부 AI 서비스([입력 필요: AI 벤더명]) 호출 시 개인을 직접 식별할 수 있는 정보([입력 필요: 마스킹 대상 항목(예: 성명, 이메일, 전화번호)])를 전송 전 비식별화(마스킹) 처리하거나, 벤더와의 데이터 비보관(Zero Data Retention) 약정을 통해 입력 데이터가 보관·재학습되지 않도록 통제합니다.",
+        "infra_patch_hint": "AI 벤더의 엔터프라이즈 ZDR(Zero Data Retention) 옵션을 활성화하거나, API 호출 직전 미들웨어에서 이메일·전화번호·식별자 등 PII를 마스킹(토큰화)한 뒤 전송하도록 수정하세요."
+      }
+    },
+    {
+      "rule_id": "EU-AI-6-26-HIGH-RISK",
+      "category": "AI_GOVERNANCE",
+      "severity": "WARNING",
+      "article_citation": "Regulation (EU) 2024/1689 제6조(1)-(3), 제26조(11), 제86조(1) 및 부속서 I·III",
+      "plain_title": "헬스케어·핀테크 도메인 내 AI 벤더 연동에 따른 고위험 AI 사전 고지·거부권 안내 누락 탐지",
+      "plain_explanation": "서비스 업종이 HEALTHCARE(의료·건강보험·응급분류 등) 또는 FINTECH(개인 신용평가·보험 가격산정 등)으로 설정되어 있고 개인정보를 처리하는 외부 AI API 연동이 탐지되었으나, 처리방침에 AI 활용 고지 및 이용자 거부·설명요구 절차가 확인되지 않았습니다. 고위험 AI 배포자 의무(사전 고지 및 설명요구권 안내 등) 적용 여부를 검토하고 고지 체계를 구비해야 합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI", "includes_pii": true }
+          },
+          {
+            "any": [
+              { "fact": "workspace.industry_domain", "operator": "equals", "value": "HEALTHCARE" },
+              { "fact": "workspace.industry_domain", "operator": "equals", "value": "FINTECH" }
+            ]
+          },
+          {
+            "any": [
+              { "fact": "legal_doc.exists", "operator": "equals", "value": false },
+              { "fact": "legal_doc.has_ai_training_opt_out_notice", "operator": "equals", "value": false },
+              { "fact": "legal_doc.disclosed_opt_out_method", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[고위험 AI 기반 의사결정 사전 고지 및 설명요구권]\n1. 당사는 [입력 필요: 적용 업무(예: 신용도 평가, 보험료 산정, 건강 상태 분류)] 과정에서 고위험 AI 시스템을 활용하고 있습니다.\n2. AI 시스템의 출력에 기반하여 법적 효력 또는 이에 준하는 중대한 영향을 미치는 결정이 내려진 경우, 이용자는 [입력 필요: 담당 부서/연락처]를 통해 의사결정 과정에서 AI가 수행한 역할 및 주요 결정 요소에 대한 명확하고 의미 있는 설명을 요청할 수 있습니다.",
+        "infra_patch_hint": "해당 AI 기능이 EU AI법 부속서 III 고위험 영역(신용평가, 보험 가격산정, 의료 분류 등) 또는 자연인 프로파일링에 해당하는지 확인하고, 해당 시 사용자 사전 고지 UI와 인간 검토(Human-in-the-loop) 절차를 구현하세요."
+      }
+    },
+    {
+      "rule_id": "EU-AI-15-SECURITY",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "Regulation (EU) 2024/1689 제15조(1), (5) 및 제2조(7)",
+      "plain_title": "AI 벤더 연동 구간 전송·저장 암호화 설정 미비 탐지",
+      "plain_explanation": "개인정보(PII)를 처리하는 외부 AI API가 연동되어 있으나, 인프라 설정에서 전송 구간 암호화(TLS/HTTPS) 또는 입출력 데이터·캐시의 저장 암호화(KMS/AES)가 비활성화된 상태가 탐지되었습니다. AI 시스템의 기밀성 보호 및 무단 접근 방지를 위해 전송·저장 암호화를 모두 활성화해야 합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "AI", "includes_pii": true }
+          },
+          {
+            "any": [
+              { "fact": "security.encryption_in_transit", "operator": "equals", "value": false },
+              { "fact": "security.encryption_at_rest", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[AI 연동 데이터 기술적 보호조치]\n당사는 외부 AI 시스템으로 전송되는 모든 입력 데이터에 대해 TLS 1.2 이상의 전송 구간 암호화를 적용하며, 서비스 내 저장되는 AI 입출력 이력 및 캐시 데이터는 [입력 필요: 암호화 알고리즘 및 키 관리 방식(예: AES-256, 클라우드 KMS)]을 통해 안전하게 암호화하여 보관합니다.",
+        "infra_patch_hint": "모든 AI API 엔드포인트 호출을 HTTPS(TLS 1.2+)로 강제하고, AI 프롬프트·응답 로그가 저장되는 DB 및 스토리지 버킷에 KMS 기반 저장 암호화(Encryption at Rest)를 활성화하세요."
+      }
+    }
+  ]
+}

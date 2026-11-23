@@ -1,0 +1,183 @@
+{
+  "pack_meta": {
+    "id": "US_CLOUD_ACT_v2",
+    "layer": 2,
+    "country_code": "US",
+    "law_name": "미국 클라우드법 (Clarifying Lawful Overseas Use of Data Act / CLOUD Act)",
+    "version": "2026.1",
+    "effective_date": "2018-03-23",
+    "penalty_summary": "별도 과징금 조항은 없으나, 미국 저장통신법(18 U.S.C. Ch. 121)상 보존·제출 명령 불이행 시 연방법원 제재(법정모독 등) 및 외국 개인정보보호법과의 법령 상충에 따른 제재 리스크 발생",
+    "adequacy_countries": []
+  },
+  "applicability": {
+    "any": [
+      { "fact": "workspace.business_country", "operator": "equals", "value": "US" },
+      { "fact": "transfers.destination_countries", "operator": "includes", "value": "US" },
+      {
+        "fact": "transfers.detected_vendors",
+        "operator": "any_vendor_matches",
+        "value": { "default_country": "US", "includes_pii": true }
+      },
+      { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true },
+      { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "US-CLOUD-103A-VIRTUAL",
+      "category": "VIRTUAL_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "CLOUD Act SEC. 103(a) (18 U.S.C. § 2713)",
+      "plain_title": "미국 관할권 클라우드 사업자의 역외 데이터 통제 및 미고지 가상 국외이전 리스크 탐지",
+      "plain_explanation": "데이터의 물리적 저장 리전이 미국 외 국가에 있더라도 미국 관할권에 속하는 클라우드(ECS/RCS) 사업자가 KMS 암호화 키 또는 IAM 접근 통제권을 보유하고 개인정보가 비식별화되지 않은 상태라면 18 U.S.C. § 2713에 따른 보존·제출 명령 적용 범위에 포함될 수 있습니다. 현재 처리방침이 국내 한정 보관을 주장하거나 이전 대상국 법령·안전조치 고지가 모두 누락되어 코드·인프라 설정과 문서 간 정합성 불일치(Drift)가 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "category": "CLOUD", "default_country": "US", "includes_pii": true }
+          },
+          {
+            "any": [
+              { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true },
+              { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true }
+            ]
+          },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
+          {
+            "any": [
+              { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+              {
+                "all": [
+                  { "fact": "legal_doc.disclosed_dest_country_law_info", "operator": "equals", "value": false },
+                  { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": { "category": "CLOUD", "default_country": "US", "includes_pii": true }
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 경고: 처리방침에는 데이터를 국내에만 보관한다고 명시되어 있으나, 실제 인프라에서 미국 관할권 클라우드 사업자가 개인정보 처리·키/권한 통제 경로에 연결되어 있어 CLOUD Act 역외 적용 리스크가 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "회사는 [입력 필요: 데이터 저장 리전 국가]에 위치한 [입력 필요: 클라우드 사업자명] 인프라를 이용하고 있으며, 해당 사업자가 미국 관할권에 속함에 따라 미국 CLOUD Act 등 관련 법령에 근거한 적법한 정부 요청 절차가 적용될 수 있습니다. 회사는 고객 정보 보호를 위해 [입력 필요: 고객 관리형 암호화 키(HYOK/BYOK) 및 접근 통제 조치]를 운영하고 있습니다.",
+        "infra_patch_hint": "클라우드 사업자 관리형 KMS 대신 고객 단독 관리 키(HYOK) 또는 클라이언트 측 종단간 암호화(E2EE)를 적용해 사업자의 평문 복호화·통제 범위를 최소화하고, 외부 IAM 접근 권한을 제한하거나 비미국 관할권 인프라로 민감 개인정보를 분리하세요."
+      }
+    },
+    {
+      "rule_id": "US-CLOUD-103B-COMITY",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "WARNING",
+      "article_citation": "CLOUD Act SEC. 103(b) (18 U.S.C. § 2703(h))",
+      "plain_title": "비미국 데이터 주체 정보의 미국 리전 이전 시 법령 상충 및 보호조치 고지 누락 탐지",
+      "plain_explanation": "비미국 사업자가 개인정보를 실제 저장 리전이 미국인 벤더로 이전할 경우, 자국이 미국과 18 U.S.C. § 2523 행정협정을 체결한 적격 외국 정부가 아니라면 영장 취소·수정(Motion to Quash) 특례 절차 적용에 한계가 있을 수 있습니다. 현재 처리방침에서 이전 대상국 법령 정보 및 안전조치 안내가 누락된 상태가 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "workspace.business_country", "operator": "not_equals", "value": "US" },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "data_residency_country": "US", "includes_pii": true }
+          },
+          { "fact": "legal_doc.disclosed_dest_country_law_info", "operator": "equals", "value": false },
+          { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 경고: 처리방침은 국내 한정 보관을 주장하고 있으나, 실제 코드·인프라 설정에서 미국 저장 리전으로의 개인정보 국외이전이 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "회사는 [입력 필요: 이전 목적]을 위해 [입력 필요: 이전 항목]을 미국 소재 [입력 필요: 수탁사/제공받는 자 명칭] 리전으로 이전합니다. 미국은 CLOUD Act(18 U.S.C. § 2703 등)가 적용되는 관할권이며, 회사는 [입력 필요: 표준계약조항(SCC), 전송·저장 암호화 등 안전조치] 및 [입력 필요: 보유·이용 기간] 기준을 준수합니다.",
+        "infra_patch_hint": "미국 리전으로 전송되는 페이로드에서 불필요한 개인식별정보(PII)를 사전 마스킹·익명화하거나, 데이터 주체 거주 권역 내 리전(예: ap-northeast-2, eu-central-1)으로 스토리지 엔드포인트를 이전하세요."
+      }
+    },
+    {
+      "rule_id": "US-CLOUD-104-EXEC-AGREEMENT",
+      "category": "DISCLOSURE",
+      "severity": "WARNING",
+      "article_citation": "CLOUD Act SEC. 104 & SEC. 105(a) (18 U.S.C. § 2702(b)(9), § 2523(b)(4))",
+      "plain_title": "미국 저장 리전 이전 시 행정협정 기반 외국 정부 데이터 접근 가능성 고지 누락 탐지",
+      "plain_explanation": "개인정보가 실제 저장 리전이 미국인 벤더로 이전되는 구조에서는 미국과 18 U.S.C. § 2523 행정협정을 체결·발효한 외국 정부의 중대 범죄 수사 명령에 따라 미국 통신·클라우드 제공자가 데이터를 직접 제출할 수 있는 법적 경로가 존재합니다. 현재 처리방침에 이전 대상국의 정부 접근 관련 법령 정보가 기재되지 않은 누락이 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "transfers.destination_countries", "operator": "includes", "value": "US" },
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "data_residency_country": "US", "includes_pii": true }
+          },
+          { "fact": "legal_doc.disclosed_dest_country_law_info", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "미국 리전에 저장되는 개인정보([입력 필요: 이전되는 개인정보 항목])는 미국 법령 및 미국과 행정협정(18 U.S.C. § 2523)을 체결한 적격 외국 정부의 법원·독립기관 심사를 거친 적법한 제출 명령 대상이 될 수 있습니다. 회사는 법령상 허용 범위 내에서 [입력 필요: 이용자 통지 및 이의제기 절차]를 운영합니다.",
+        "infra_patch_hint": "미국 리전 벤더 계약 시 정부 요청 통지 의무 및 투명성 보고서 제공 여부를 확인하고, 처리방침에 미국 이전 대상국 법령 안내 섹션을 추가하세요."
+      }
+    },
+    {
+      "rule_id": "US-CLOUD-105A-ENCRYPTION",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "CLOUD Act SEC. 105(a) (18 U.S.C. § 2523(b)(3))",
+      "plain_title": "미국 관할권·미국 리전 개인정보 처리 시 전송·저장 암호화 미비 탐지",
+      "plain_explanation": "18 U.S.C. § 2523(b)(3)은 행정협정이 서비스 제공자에게 데이터 복호화 능력을 갖추도록 강제할 수 없는 암호화 중립성을 규정하고 있습니다. 미국 리전 또는 미국 관할권 벤더가 개인정보를 처리하는 현재 인프라 구성에서 전송 구간 암호화 또는 저장 시 암호화가 비활성화된 상태가 탐지되어 기술적 보호 조치 보완이 필요합니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "data_residency_country": "US", "includes_pii": true }
+              },
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "default_country": "US", "includes_pii": true }
+              }
+            ]
+          },
+          {
+            "any": [
+              { "fact": "security.encryption_in_transit", "operator": "equals", "value": false },
+              { "fact": "security.encryption_at_rest", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "회사는 개인정보의 안전한 보호를 위해 전송 구간 암호화(TLS 1.2 이상) 및 저장 시 암호화(AES-256 등)를 적용하며, [입력 필요: 고객 단독 암호화 키 관리(HYOK) 또는 암호화 키 분리 운영 정책]을 통해 제3자 및 클라우드 제공자의 무단 복호화를 방지합니다.",
+        "infra_patch_hint": "모든 외부 API·DB 구간에 TLS(encryption_in_transit)와 디스크·버킷 암호화(encryption_at_rest)를 강제 활성화하고, 필요시 클라우드 제공자가 복호화 키에 접근할 수 없도록 고객 단독 KMS(External Key Store / HYOK) 적용을 검토하세요."
+      }
+    }
+  ]
+}

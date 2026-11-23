@@ -1,0 +1,240 @@
+{
+  "pack_meta": {
+    "id": "CN_PIPL_v2",
+    "layer": 1,
+    "country_code": "CN",
+    "law_name": "중화인민공화국 개인정보보호법 (CN_PIPL)",
+    "version": "2026.1",
+    "effective_date": "2021-11-01",
+    "penalty_summary": "중대 위반 시 최대 5,000만 위안 또는 전년도 매출액의 5% 이하 과징금, 불법소득 몰수, 영업정지·허가 취소, 직접 책임자 최대 100만 위안 벌금 (Art. 66)",
+    "adequacy_countries": []
+  },
+  "applicability": {
+    "any": [
+      { "fact": "workspace.business_country", "operator": "equals", "value": "CN" },
+      { "fact": "workspace.data_subject_countries", "operator": "includes", "value": "CN" }
+    ]
+  },
+  "rules": [
+    {
+      "rule_id": "CN-PIPL-38-39",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 38, Art. 39",
+      "plain_title": "중국 외 국외 이전 시 SCC/보안평가 보호조치 및 별도 동의 누락 탐지",
+      "plain_explanation": "중국 PIPL은 적정성 인정 국가 제도가 없어 중국 역외(CN 외 국가)로 개인정보를 이전할 때 CAC 보안평가·인증·표준계약(SCC) 중 하나의 보호조치 고지와 정보주체의 별도 동의(Separate Consent)를 동시에 요구합니다. 현재 인프라에서 국외 이전이 탐지되었으나 처리방침 또는 동의 설정에 필수 항목이 누락되어 있습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+          { "fact": "transfers.destination_countries", "operator": "not_subset_of", "value": ["CN"] },
+          {
+            "any": [
+              { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false },
+              { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift: 처리방침에는 중국 내(국내) 저장·처리만 명시되어 있으나, 실제 인프라/코드에서 중국 외 국가로의 개인정보 전송이 탐지되었습니다."
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 [입력 필요: 국외 이전 목적]을 위해 귀하의 개인정보([입력 필요: 이전 항목])를 중국 역외 수령인([입력 필요: 해외 수령인 명칭 및 연락처])에게 이전합니다. 본 이전은 중국 국가인터넷정보판공실(CAC) 표준계약(SCC) 체결[또는 보안평가/보호인증]을 기반으로 수행되며, 귀하는 [입력 필요: 권리 행사 절차]를 통해 해외 수령인에 대해 권리를 행사할 수 있습니다. (별도 동의 체크박스 필수)\n[EN] We transfer your personal information ([입력 필요: categories of PI]) to an overseas recipient ([입력 필요: recipient name and contact]) outside the PRC for [입력 필요: purpose]. This transfer is safeguarded by the CAC Standard Contract (SCC) [or Security Assessment/Certification]. You may exercise your rights against the overseas recipient via [입력 필요: procedures]. (Separate consent checkbox required)",
+        "infra_patch_hint": "국외 리전으로 전송되는 API/DB 연결을 확인하고, 중국 내 리전(cn-north/cn-east 등)으로 이관하거나 회원가입/결제 UI에 국외 이전 전용 별도 동의(Unchecked 기본값) 체크박스를 추가하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-17-21",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 17, Art. 21",
+      "plain_title": "개인정보 처리방침 부재 또는 필수 고지(수집 항목·보유기간·위탁) 누락 탐지",
+      "plain_explanation": "중국 내 정보주체의 개인정보를 처리할 때는 처리방침을 공개하고 수집 항목 및 보유기간을 명시해야 하며, 외부 벤더에 처리를 위탁하는 경우 위탁 관련 고지가 필요합니다. 현재 문서와 실제 처리 현황 간 필수 고지 항목 누락이 탐지되었습니다.",
+      "condition_dsl": {
+        "any": [
+          { "fact": "legal_doc.exists", "operator": "equals", "value": false },
+          { "fact": "legal_doc.disclosed_retention_period", "operator": "equals", "value": false },
+          { "fact": "legal_doc.disclosed_items", "operator": "is_empty", "value": true },
+          {
+            "all": [
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "includes_pii": true, "transfer_purpose": "ENTRUSTMENT" }
+              },
+              { "fact": "legal_doc.has_entrustment_disclosure", "operator": "equals", "value": false }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사([입력 필요: 회사명 및 연락처])는 [입력 필요: 처리 목적 및 방식]을 위해 [입력 필요: 수집 개인정보 항목]을 수집하며, [입력 필요: 최소 보유기간] 동안 보관 후 파기합니다. 또한 서비스 제공을 위해 [입력 필요: 수탁자명]에 개인정보 처리를 위탁하고 있으며, 계약에 따라 수탁자의 보호조치를 감독합니다.\n[EN] [입력 필요: Company name and contact] collects [입력 필요: categories of PI] for [입력 필요: purposes and means] and retains it for [입력 필요: minimum retention period]. We entrust processing to [입력 필요: entrusted party] under a binding agreement ensuring security supervision.",
+        "infra_patch_hint": "서비스 접근 경로에 공개된 개인정보 처리방침 링크를 연결하고, DB 스키마 및 외부 수탁 벤더 목록과 처리방침의 수집 항목·보유기간·위탁 현황을 동기화하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-23",
+      "category": "TRACKER_SHARING",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 23",
+      "plain_title": "제3자 SDK·파트너 개인정보 제공 시 별도 동의 누락 탐지",
+      "plain_explanation": "단순 처리위탁이 아닌 제3자 제공(THIRD_PARTY_SHARING) 목적의 외부 SDK·트래커·파트너 API로 개인정보가 전송되는 경우, 수령인 정보 고지와 함께 별도 동의가 필요합니다. 현재 코드상 제3자 제공이 탐지되었으나 별도 동의 설정이 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.detected_vendors",
+            "operator": "any_vendor_matches",
+            "value": { "includes_pii": true, "transfer_purpose": "THIRD_PARTY_SHARING" }
+          },
+          { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            {
+              "fact": "transfers.detected_vendors",
+              "operator": "any_vendor_matches",
+              "value": { "includes_pii": true, "transfer_purpose": "THIRD_PARTY_SHARING" }
+            },
+            { "fact": "legal_doc.disclosed_vendors", "operator": "is_empty", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift: 코드 내 제3자 제공용 SDK/트래커가 탐지되었으나 처리방침에 제3자 수령인 목록이 고지되어 있지 않습니다."
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 귀하의 별도 동의를 받아 제3자([입력 필요: 수령인 명칭 및 연락처])에게 [입력 필요: 제공 목적 및 방식]을 위해 [입력 필요: 제공 항목]을 제공합니다.\n[EN] With your separate consent, we provide [입력 필요: categories of PI] to [입력 필요: third-party recipient name and contact] for [입력 필요: purposes and means].",
+        "infra_patch_hint": "제3자 트래커/마케팅 SDK 초기화 코드를 별도 동의 획득 이후에만 실행되도록 지연 로딩(Consent-gated initialization)으로 수정하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-24",
+      "category": "AI_GOVERNANCE",
+      "severity": "WARNING",
+      "article_citation": "PIPL Art. 24, Art. 73(2)",
+      "plain_title": "자동화 의사결정·AI 추천 기능의 거부권(Opt-out) 고지 누락 탐지",
+      "plain_explanation": "AI SaaS 환경이거나 개인정보를 처리하는 AI 벤더를 연동하여 자동화 의사결정·개인화 추천·마케팅을 수행하는 경우, 비개인화 옵션 또는 간편한 거부권 행사 방법을 제공·고지해야 합니다. 현재 처리방침에서 거부권 고지가 누락된 상태로 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              { "fact": "workspace.industry_domain", "operator": "equals", "value": "AI_SAAS" },
+              {
+                "fact": "transfers.detected_vendors",
+                "operator": "any_vendor_matches",
+                "value": { "includes_pii": true, "category": "AI" }
+              }
+            ]
+          },
+          { "fact": "legal_doc.disclosed_opt_out_method", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사가 자동화 의사결정(AI 추천·마케팅 푸시 등)을 사용하는 경우, 귀하는 [입력 필요: 설정 메뉴/거부 경로]를 통해 개인 특성에 기반하지 않은 옵션을 선택하거나 간편하게 거부할 수 있으며, 권익에 중대한 영향을 미치는 자동화 결정에 대해 설명 요구 및 거부를 요청할 수 있습니다.\n[EN] Where we use automated decision-making (including AI recommendations or marketing push), you may choose non-personalized options or conveniently opt out via [입력 필요: settings/opt-out path], and request an explanation or refuse decisions made solely through automated means that significantly affect your rights.",
+        "infra_patch_hint": "사용자 설정 화면에 개인화 추천/AI 자동화 기능 비활성화(Opt-out) 토글을 구현하고, 처리방침에 해당 경로를 명시하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-28-29",
+      "category": "DISCLOSURE",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 28, Art. 29, Art. 30",
+      "plain_title": "민감정보(의료·금융) 처리 시 별도 동의 누락 탐지",
+      "plain_explanation": "의료·건강(HEALTHCARE) 및 금융계좌(FINTECH) 도메인은 PIPL상 민감정보 처리 영역에 해당하며, 처리 필요성과 권익 영향 고지 및 별도 동의가 필수입니다. 현재 민감정보 처리 도메인으로 식별되었으나 별도 동의 설정이 확인되지 않았습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "any": [
+              { "fact": "workspace.industry_domain", "operator": "equals", "value": "HEALTHCARE" },
+              { "fact": "workspace.industry_domain", "operator": "equals", "value": "FINTECH" }
+            ]
+          },
+          { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 [입력 필요: 특정 목적 및 처리 필요성]을 위해 귀하의 민감정보([입력 필요: 의료/금융 항목])를 처리합니다. 해당 정보는 유출 시 인격·재산 안전에 영향을 미칠 수 있으므로 엄격한 암호화 및 접근통제 조치를 적용하며, 귀하의 별도 동의를 받아 처리합니다.\n[EN] We process your sensitive personal information ([입력 필요: medical/financial items]) strictly for [입력 필요: specific purpose and necessity]. Given the potential impact on your rights and property security, we apply strict protective measures and obtain your separate consent prior to processing.",
+        "infra_patch_hint": "민감정보 수집 폼 진입 전에 일반 약관과 분리된 민감정보 전용 별도 동의 UI를 배치하고, 동의 이력을 별도 필드로 기록하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-40-41",
+      "category": "VIRTUAL_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 40, Art. 41",
+      "plain_title": "중국 내 저장 데이터에 대한 해외 IAM·KMS 원격 접근(가상이전) 탐지",
+      "plain_explanation": "데이터가 물리적으로 중국 내 리전에 저장되어 있더라도 해외 IAM 계정의 원격 접근이나 해외 KMS 키 통제가 존재하는 경우, 실질적 국외 이전(가상이전) 및 외국 기관 무단 제공 리스크가 발생합니다.",
+      "condition_dsl": {
+        "any": [
+          { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true },
+          { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "condition": {
+          "all": [
+            { "fact": "legal_doc.claims_domestic_only", "operator": "equals", "value": true },
+            {
+              "any": [
+                { "fact": "transfers.virtual_transfer.foreign_iam_access", "operator": "equals", "value": true },
+                { "fact": "transfers.virtual_transfer.foreign_kms_control", "operator": "equals", "value": true }
+              ]
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift: 처리방침은 중국 내 한정 처리를 표방하나, 해외 IAM 권한 또는 해외 KMS 키를 통한 원격 접근 경로(가상이전)가 열려 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 중국 내 수집·생성된 개인정보를 원칙적으로 중국 내 서버에 저장하며, 역외 원격 접근이 필요한 경우 PIPL 제38조~제40조에 따른 보안평가·표준계약 및 별도 동의를 거칩니다. 또한 중국 주관 당국의 승인 없이 외국 사법·수사기관에 데이터를 제공하지 않습니다.\n[EN] Personal information collected and generated within the PRC is stored domestically. Any cross-border remote access is subject to security assessment/SCC and separate consent under PIPL Art. 38-40. We do not provide PRC-stored data to foreign judicial or law enforcement authorities without approval from competent PRC authorities.",
+        "infra_patch_hint": "중국 리전 DB/스토리지에 대한 해외 IAM 역할(Role)의 읽기 권한을 차단하고, 암호화 키(KMS)를 중국 내 리전에서 독립 관리하도록 분리하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-51-3",
+      "category": "SECURITY",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 51(3), Art. 73(3)",
+      "plain_title": "기술적 보안 조치(전송 중·저장 시 암호화) 미적용 탐지",
+      "plain_explanation": "PIPL은 무단 접근·유출·변조를 방지하기 위해 암호화 등 기술적 보안 조치를 의무화하고 있습니다. 현재 인프라 설정에서 전송 중 암호화(TLS) 또는 저장 시 암호화(Encryption at Rest) 중 하나 이상이 비활성화 상태로 탐지되었습니다.",
+      "condition_dsl": {
+        "any": [
+          { "fact": "security.encryption_in_transit", "operator": "equals", "value": false },
+          { "fact": "security.encryption_at_rest", "operator": "equals", "value": false }
+        ]
+      },
+      "drift_check": {
+        "enabled": false,
+        "condition": {},
+        "alert_message": ""
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 개인정보의 안전한 처리를 위해 전송 구간 암호화(TLS), 저장 데이터 암호화(AES-256 등), 및 비식별화(De-identification) 조치를 포함한 기술적 보호조치를 적용하고 있습니다.\n[EN] We implement technical security measures including encryption in transit (TLS), encryption at rest (e.g., AES-256), and de-identification to prevent unauthorized access, breach, tampering, or loss of personal information.",
+        "infra_patch_hint": "모든 외부·내부 통신에 TLS 1.2+를 강제하고, 스토리지/DB의 저장 시 암호화(Encryption at Rest)를 활성화하며, 필요 시 국외 전송 페이로드에 PII 비식별화 필터를 적용하세요."
+      }
+    }
+  ]
+}
