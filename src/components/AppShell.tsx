@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Activity,
   ChevronDown,
@@ -64,6 +64,30 @@ export function AppShell({
 }: AppShellProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return;
+    const handleMouseDown = (e: MouseEvent) => {
+      if (
+        profileMenuRef.current &&
+        !profileMenuRef.current.contains(e.target as Node)
+      ) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setProfileMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleMouseDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [profileMenuOpen]);
 
   const activeProfile =
     profiles.find((p) => p.id === activeProfileId) ?? profiles[0];
@@ -201,9 +225,11 @@ export function AppShell({
               <Menu className="w-5 h-5" />
             </button>
 
-            <div className="relative">
+            <div ref={profileMenuRef} className="relative">
               <button
                 type="button"
+                aria-expanded={profileMenuOpen}
+                aria-haspopup="menu"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0B1120] border border-slate-800 hover:border-slate-700 text-xs font-medium text-slate-100 whitespace-nowrap max-w-[240px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >
@@ -214,7 +240,11 @@ export function AppShell({
               </button>
 
               {profileMenuOpen && (
-                <div className="absolute left-0 mt-1.5 w-80 rounded-lg bg-[#0E1528] border border-slate-700 shadow-2xl py-1.5 z-40">
+                <div
+                  role="menu"
+                  aria-label="워크스페이스 프로필 목록"
+                  className="absolute left-0 mt-1.5 w-80 rounded-lg bg-[#0E1528] border border-slate-700 shadow-2xl py-1.5 z-40"
+                >
                   <div className="px-3 py-1.5 text-[11px] font-medium text-slate-400 border-b border-slate-800">
                     워크스페이스 프로필 전환 ({profiles.length})
                   </div>

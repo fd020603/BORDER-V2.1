@@ -28,6 +28,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .motion-reduce-hidden {
+    display: none;
+  }
+}
+
 .print-only {
   display: none;
 }

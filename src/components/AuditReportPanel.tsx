@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   AlertOctagon,
   AlertTriangle,
+  ArrowDownRight,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -18,6 +19,7 @@ import type {
   EvaluationVerdict,
   PolicyPackV2,
 } from '@/lib/types';
+import { DataSovereigntySummaryCard } from './DataSovereigntySummaryCard';
 import { InfoTooltip } from './InfoTooltip';
 
 interface AuditReportPanelProps {
@@ -359,7 +361,7 @@ export function AuditReportPanel({
                 return (
                   <span
                     key={`${pack.pack_id}-${rawVersion}-${idx}`}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[11px] font-mono tabular-nums ${pillClass}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-mono tabular-nums ${pillClass}`}
                   >
                     <span>L{pack.layer}</span>
                     <span>{lawName}</span>
@@ -383,7 +385,7 @@ export function AuditReportPanel({
               <button
                 type="button"
                 onClick={() => setShowStandbyPacks((prev) => !prev)}
-                className="no-print inline-flex items-center gap-1 px-2.5 py-1 rounded-full border border-slate-800 bg-[#060913] hover:border-slate-700 text-[11px] font-mono text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap"
+                className="no-print inline-flex items-center gap-1 px-2.5 py-1 rounded-md border border-slate-800 bg-[#060913] hover:border-slate-700 text-[11px] font-mono text-slate-400 hover:text-slate-200 transition-colors whitespace-nowrap"
               >
                 <span>
                   {showStandbyPacks
@@ -410,7 +412,7 @@ export function AuditReportPanel({
                 return (
                   <span
                     key={`standby-${pack.pack_id}-${rawVersion}-${idx}`}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-slate-800 bg-[#060913] text-[11px] font-mono text-slate-500"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-slate-800 bg-[#060913] text-[11px] font-mono text-slate-500"
                   >
                     <span>L{pack.layer}</span>
                     <span>{lawName}</span>
@@ -424,53 +426,67 @@ export function AuditReportPanel({
         </div>
       </section>
 
-      {/* Top 3 Immediate Priority Actions */}
+      {/* Data Sovereignty Summary Card based on Pass Rate */}
+      <DataSovereigntySummaryCard facts={facts} result={result} />
+
+      {/* Top 3 Immediate Execution Checklist */}
       {topImmediateActions.length > 0 && (
         <section
-          aria-label="지금 당장 해결할 핵심 조치"
+          aria-label="실행 우선순위 패치 체크리스트"
           className="rounded-xl border border-sky-800/60 bg-[#0B1120] p-5 space-y-3"
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2">
               <Zap className="w-4 h-4 text-sky-400 shrink-0" />
               <h3 className="font-display text-sm font-semibold text-slate-100">
-                지금 당장 해결할 핵심 조치 (예상 10분)
+                지금 당장 실행할 패치 체크리스트 (TOP {topImmediateActions.length})
               </h3>
             </div>
-            <span className="font-mono text-[11px] text-sky-300">
-              우선순위 TOP {topImmediateActions.length}
-            </span>
+            <button
+              type="button"
+              onClick={() => {
+                document
+                  .getElementById('dual-remediation-kit')
+                  ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className="no-print inline-flex items-center gap-1 text-xs font-medium text-sky-300 hover:text-sky-200 transition-colors whitespace-nowrap self-start sm:self-auto"
+            >
+              <span>자동 치유 키트로 이동</span>
+              <ArrowDownRight className="w-3.5 h-3.5" />
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             {topImmediateActions.map((rule, idx) => {
               const isBlocker = rule.severity === 'BLOCKER';
+              const hasInfraPatch = Boolean(rule.remediation.infra_patch_hint?.trim());
               return (
                 <div
-                  key={rule.rule_id}
-                  className="rounded-lg border border-slate-800 bg-[#060913] p-3.5 space-y-1.5"
+                  key={`${rule.pack_id}-${rule.rule_id}-${idx}`}
+                  className="rounded-lg border border-slate-800 bg-[#060913] p-3.5 flex flex-col justify-between gap-2"
                 >
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
-                    <span className="text-sky-300 font-semibold">
-                      조치 #{idx + 1}
-                    </span>
-                    <span
-                      className={
-                        isBlocker
-                          ? 'text-rose-300 font-semibold'
-                          : 'text-amber-300 font-semibold'
-                      }
-                    >
-                      {rule.severity}
-                      {rule.has_drift ? ' · DRIFT' : ''}
-                    </span>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2 text-[11px] font-mono">
+                      <span className="text-sky-300 font-semibold">
+                        STEP #{idx + 1} · {hasInfraPatch ? '인프라/보안 패치' : '법무/문서 패치'}
+                      </span>
+                      <span
+                        className={
+                          isBlocker
+                            ? 'text-rose-300 font-semibold'
+                            : 'text-amber-300 font-semibold'
+                        }
+                      >
+                        {rule.severity}
+                      </span>
+                    </div>
+                    <p className="text-xs font-medium text-slate-100 leading-relaxed">
+                      {rule.remediation.infra_patch_hint || rule.remediation.legal_template}
+                    </p>
                   </div>
-                  <div className="text-xs font-semibold text-slate-100 leading-snug">
-                    {rule.plain_title}
+                  <div className="pt-2 border-t border-slate-800/70 font-mono text-[10px] text-slate-400 truncate">
+                    근거: {rule.pack_name} · {rule.article_citation}
                   </div>
-                  <p className="text-[11px] text-slate-300 leading-relaxed">
-                    {rule.remediation.infra_patch_hint || rule.remediation.legal_template}
-                  </p>
                 </div>
               );
             })}

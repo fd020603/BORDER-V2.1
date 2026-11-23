@@ -27,6 +27,8 @@ interface DualRemediationKitProps {
   facts: CanonicalFactModel;
   result: EvaluationResult;
   activePacks?: PolicyPackV2[];
+  onApplyLegalDraft?: (markdownDraft: string) => void;
+  onApplySecurityFixes?: () => void;
   onShowToast?: (message: string, variant?: ToastVariant) => void;
 }
 
@@ -38,10 +40,36 @@ interface DiffLine {
   text: string;
 }
 
+const COUNTRY_AWS_REGION_MAP: Record<string, { region: string; label: string }> = {
+  KR: { region: 'ap-northeast-2', label: '서울' },
+  US: { region: 'us-east-1', label: '버지니아(미국)' },
+  JP: { region: 'ap-northeast-1', label: '도쿄(일본)' },
+  EU: { region: 'eu-central-1', label: '프랑크푸르트(EU)' },
+  SG: { region: 'ap-southeast-1', label: '싱가포르' },
+  GB: { region: 'eu-west-2', label: '런던(영국)' },
+  CN: { region: 'cn-north-1', label: '베이징(중국)' },
+  IN: { region: 'ap-south-1', label: '뭄바이(인도)' },
+};
+
+function getAwsRegionForCountry(countryCode: string): {
+  region: string;
+  label: string;
+} {
+  const code = countryCode.trim().toUpperCase();
+  return (
+    COUNTRY_AWS_REGION_MAP[code] ?? {
+      region: `${code.toLowerCase() || 'global'}-region-1`,
+      label: code || '해외',
+    }
+  );
+}
+
 export function DualRemediationKit({
   facts,
   result,
   activePacks = DEFAULT_POLICY_PACKS,
+  onApplyLegalDraft,
+  onApplySecurityFixes,
   onShowToast,
 }: DualRemediationKitProps) {
   const [activeTab, setActiveTab] = useState<KitTab>('legal');
@@ -252,19 +280,90 @@ export function DualRemediationKit({
   </span>
 </label>`;
 
+  const businessCountry = facts.workspace.business_country.toUpperCase() || 'KR';
+  const domesticRegion = getAwsRegionForCountry(businessCountry);
+  const foreignDestinations = Array.from(
+    new Set(
+      facts.transfers.destination_countries
+        .map((c) => c.toUpperCase())
+        .filter((c) => c.length > 0 && c !== businessCountry),
+    ),
+  );
+  const primaryForeignCountry = foreignDestinations[0] ?? 'US';
+  const primaryForeignRegion = getAwsRegionForCountry(primaryForeignCountry);
+  const hasForeignIam = facts.transfers.virtual_transfer.foreign_iam_access;
+  const hasForeignKms = facts.transfers.virtual_transfer.foreign_kms_control;
+  const redactFnName =
+    businessCountry === 'KR' ? 'redactKoreanPii' : 'redactPii';
+
   const terraformDiff: DiffLine[] = [
     { type: 'context', text: 'provider "aws" {' },
-    { type: 'remove', text: '  region = "ap-northeast-1" # 해외 리전(도쿄) 저장으로 국외 보관 발생' },
-    { type: 'add', text: '  region = "ap-northeast-2" # 국내 리전(서울) 고정' },
+    ...(foreignDestinations.length > 0
+      ? ([
+          ...foreignDestinations.map((countryCode): DiffLine => {
+            const foreignRegion = getAwsRegionForCountry(countryCode);
+            return {
+              type: 'remove',
+              text: `  region = "${foreignRegion.region}" # 해외 리전(${foreignRegion.label}) 저장·이전 탐지`,
+            };
+          }),
+          {
+            type: 'add',
+            text: `  region = "${domesticRegion.region}" # 국내 리전(${domesticRegion.label}) 고정`,
+          },
+        ] as DiffLine[])
+      : ([
+          {
+            type: 'context',
+            text: `  region = "${domesticRegion.region}" # 현재 국내 리전(${domesticRegion.label}) 유지 중`,
+          },
+        ] as DiffLine[])),
     { type: 'context', text: '}' },
     { type: 'context', text: '' },
+    ...(hasForeignKms
+      ? ([
+          {
+            type: 'context',
+            text: `# [BLOCKER 치유 강조] 해외 KMS 키 통제 탐지 (${primaryForeignRegion.region}) → ${businessCountry} 국내 CMK 교체`,
+          },
+        ] as DiffLine[])
+      : ([] as DiffLine[])),
     { type: 'context', text: 'resource "aws_kms_key" "domestic_cmk" {' },
-    { type: 'remove', text: '  # kms_key_id = "arn:aws:kms:us-east-1:..." (해외 KMS 통제)' },
-    { type: 'add', text: '  description             = "Seoul-only Customer Managed KMS Key"' },
-    { type: 'add', text: '  enable_key_rotation     = true' },
+    ...(hasForeignKms
+      ? ([
+          {
+            type: 'remove',
+            text: `  kms_key_id              = "arn:aws:kms:${primaryForeignRegion.region}:123456789012:key/foreign-cmk" # 탐지된 해외 KMS 통제 제거`,
+          },
+          {
+            type: 'add',
+            text: `  description             = "${businessCountry}-only Customer Managed KMS Key (${domesticRegion.region})"`,
+          },
+          {
+            type: 'add',
+            text: '  enable_key_rotation     = true',
+          },
+          {
+            type: 'add',
+            text: '  policy                  = data.aws_iam_policy_document.domestic_kms_only.json',
+          },
+        ] as DiffLine[])
+      : ([
+          {
+            type: 'add',
+            text: `  description             = "${businessCountry}-only Customer Managed KMS Key (${domesticRegion.region})"`,
+          },
+          {
+            type: 'add',
+            text: '  enable_key_rotation     = true',
+          },
+        ] as DiffLine[])),
     { type: 'context', text: '}' },
     { type: 'context', text: '' },
-    { type: 'context', text: 'resource "aws_s3_bucket_server_side_encryption_configuration" "pii_sse" {' },
+    {
+      type: 'context',
+      text: 'resource "aws_s3_bucket_server_side_encryption_configuration" "pii_sse" {',
+    },
     { type: 'add', text: '  rule {' },
     { type: 'add', text: '    apply_server_side_encryption_by_default {' },
     { type: 'add', text: '      kms_master_key_id = aws_kms_key.domestic_cmk.arn' },
@@ -275,35 +374,164 @@ export function DualRemediationKit({
   ];
 
   const iamJsonDiff: DiffLine[] = [
+    ...(hasForeignIam
+      ? [
+          {
+            type: 'context' as const,
+            text: `// [BLOCKER 치유 강조] 해외 IAM 원격 열람 탐지 — ${domesticRegion.region}(${businessCountry}) 외 접근 및 비암호화 전송 즉시 차단`,
+          },
+        ]
+      : [
+          {
+            type: 'context' as const,
+            text: `// ${businessCountry} 국내 리전(${domesticRegion.region}) 한정 및 TLS 강제 버킷 정책`,
+          },
+        ]),
     { type: 'context', text: '{' },
     { type: 'context', text: '  "Version": "2012-10-17",' },
     { type: 'context', text: '  "Statement": [' },
-    { type: 'remove', text: '    { "Effect": "Allow", "Principal": { "AWS": "arn:aws:iam::999988887777:role/us-hq-admin" }, "Action": "s3:GetObject", "Resource": "arn:aws:s3:::prod-pii/*" },' },
+    ...(hasForeignIam
+      ? [
+          {
+            type: 'remove' as const,
+            text: `    { "Effect": "Allow", "Principal": { "AWS": "arn:aws:iam::999988887777:role/${primaryForeignCountry.toLowerCase()}-hq-admin" }, "Action": "s3:GetObject", "Resource": "arn:aws:s3:::prod-pii/*" },`,
+          },
+        ]
+      : []),
     { type: 'add', text: '    {' },
-    { type: 'add', text: '      "Sid": "DenyCrossBorderAndInsecureTransport",' },
+    {
+      type: 'add',
+      text: hasForeignIam
+        ? '      "Sid": "DenyForeignIamAccessAndEnforceDomesticRegion",'
+        : '      "Sid": "DenyCrossBorderAndInsecureTransport",',
+    },
     { type: 'add', text: '      "Effect": "Deny",' },
     { type: 'add', text: '      "Principal": "*",' },
-    { type: 'add', text: '      "Action": "s3:*",' },
+    { type: 'add', text: '      "Action": ["s3:*", "rds:*"],' },
     { type: 'add', text: '      "Resource": "arn:aws:s3:::prod-pii/*",' },
     { type: 'add', text: '      "Condition": {' },
     { type: 'add', text: '        "Bool": { "aws:SecureTransport": "false" },' },
-    { type: 'add', text: '        "StringNotEquals": { "aws:RequestedRegion": "ap-northeast-2" }' },
+    {
+      type: 'add',
+      text: `        "StringNotEquals": { "aws:RequestedRegion": "${domesticRegion.region}" }`,
+    },
     { type: 'add', text: '      }' },
     { type: 'add', text: '    }' },
     { type: 'context', text: '  ]' },
     { type: 'context', text: '}' },
   ];
 
+  const aiVendors = activeVendors.filter((v) => v.category === 'AI');
+  const hasOpenAi = aiVendors.some((v) => v.sdk === 'openai');
+  const hasAnthropic = aiVendors.some((v) => v.sdk === '@anthropic-ai/sdk');
+  const hasGemini = aiVendors.some((v) => v.sdk === '@google/genai');
+  const otherAiVendors = aiVendors.filter(
+    (v) =>
+      v.sdk !== 'openai' &&
+      v.sdk !== '@anthropic-ai/sdk' &&
+      v.sdk !== '@google/genai',
+  );
+
   const aiMiddlewareDiff: DiffLine[] = [
-    { type: 'context', text: '// LLM API 호출 전 PII 마스킹 및 학습 제외(ZDR) 적용 예시' },
-    { type: 'remove', text: 'const res = await openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: rawUserText }] });' },
-    { type: 'add', text: 'const maskedText = redactKoreanPii(rawUserText); // 이메일·전화번호·주민번호 치환' },
-    { type: 'add', text: 'const res = await openai.chat.completions.create({' },
-    { type: 'add', text: '  model: "gpt-4o",' },
-    { type: 'add', text: '  store: false, // Zero Data Retention 요청' },
-    { type: 'add', text: '  messages: [{ role: "user", content: maskedText }],' },
-    { type: 'add', text: '});' },
+    {
+      type: 'context',
+      text:
+        aiVendors.length > 0
+          ? `// 탐지된 AI SDK(${aiVendors.map((v) => v.sdk).join(', ')}) 대상 PII 마스킹 및 학습 제외(ZDR) 패치`
+          : '// 외부 LLM API 연동 시 적용할 표준 PII 마스킹 및 학습 제외(ZDR) 미들웨어 예시',
+    },
   ];
+
+  if (hasOpenAi) {
+    aiMiddlewareDiff.push(
+      { type: 'context', text: '' },
+      { type: 'context', text: '// 1) OpenAI SDK (`openai`) — store: false (ZDR) + PII 마스킹' },
+      {
+        type: 'remove',
+        text: 'const res = await openai.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: rawUserText }] });',
+      },
+      {
+        type: 'add',
+        text: `const maskedText = ${redactFnName}(rawUserText); // 이메일·전화번호·고유식별자 치환`,
+      },
+      { type: 'add', text: 'const res = await openai.chat.completions.create({' },
+      { type: 'add', text: '  model: "gpt-4o",' },
+      { type: 'add', text: '  store: false, // Zero Data Retention (API 학습·저장 제외)' },
+      { type: 'add', text: '  messages: [{ role: "user", content: maskedText }],' },
+      { type: 'add', text: '});' },
+    );
+  }
+
+  if (hasAnthropic) {
+    aiMiddlewareDiff.push(
+      { type: 'context', text: '' },
+      { type: 'context', text: '// 2) Anthropic SDK (`@anthropic-ai/sdk`) — ZDR 정책 + PII 마스킹' },
+      {
+        type: 'remove',
+        text: 'const msg = await anthropic.messages.create({ model: "claude-3-7-sonnet-latest", max_tokens: 1024, messages: [{ role: "user", content: rawUserText }] });',
+      },
+      {
+        type: 'add',
+        text: `const maskedText = ${redactFnName}(rawUserText); // 전송 전 직접 식별자 마스킹`,
+      },
+      { type: 'add', text: 'const msg = await anthropic.messages.create(' },
+      {
+        type: 'add',
+        text: '  { model: "claude-3-7-sonnet-latest", max_tokens: 1024, messages: [{ role: "user", content: maskedText }] },',
+      },
+      {
+        type: 'add',
+        text: '  { headers: { "anthropic-beta": "zero-data-retention-2024-11-01" } }, // Enterprise ZDR 계약 적용',
+      },
+      { type: 'add', text: ');' },
+    );
+  }
+
+  if (hasGemini) {
+    aiMiddlewareDiff.push(
+      { type: 'context', text: '' },
+      { type: 'context', text: '// 3) Google GenAI SDK (`@google/genai`) — 유료/Vertex ZDR 티어 + PII 마스킹' },
+      {
+        type: 'remove',
+        text: 'const res = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: rawUserText });',
+      },
+      {
+        type: 'add',
+        text: `const maskedText = ${redactFnName}(rawUserText); // 프롬프트 내 개인정보 마스킹`,
+      },
+      {
+        type: 'add',
+        text: '// Vertex AI 또는 Paid Tier(Zero Data Retention / 모델 학습 미사용) API 키 사용',
+      },
+      { type: 'add', text: 'const res = await ai.models.generateContent({' },
+      { type: 'add', text: '  model: "gemini-2.5-flash",' },
+      { type: 'add', text: '  contents: maskedText,' },
+      { type: 'add', text: '});' },
+    );
+  }
+
+  if (otherAiVendors.length > 0 || (!hasOpenAi && !hasAnthropic && !hasGemini)) {
+    const targetLabel =
+      otherAiVendors.length > 0
+        ? otherAiVendors.map((v) => `${v.name} (${v.sdk})`).join(', ')
+        : 'AI SDK';
+    aiMiddlewareDiff.push(
+      { type: 'context', text: '' },
+      { type: 'context', text: `// ${targetLabel} — 공통 PII 마스킹 및 Zero Data Retention 래퍼` },
+      {
+        type: 'remove',
+        text: 'const aiResponse = await aiClient.generate({ prompt: rawUserText });',
+      },
+      {
+        type: 'add',
+        text: `const maskedText = ${redactFnName}(rawUserText); // 이메일·전화번호·식별자 마스킹`,
+      },
+      {
+        type: 'add',
+        text: 'const aiResponse = await aiClient.generate({ prompt: maskedText, store: false }); // ZDR 옵션 활성화',
+      },
+    );
+  }
 
   const activeDiffLines =
     activeDiffTab === 'terraform'
@@ -319,30 +547,29 @@ export function DualRemediationKit({
 
   const consoleChecklist = [
     {
-      title: '1. AWS S3 · RDS 리전 격리 확인',
-      detail:
-        'AWS Console → S3 / RDS → 리전 선택기가 `아시아 태평양(서울) ap-northeast-2`인지 확인하고, 타 리전 버킷 복제(CRR) 규칙을 해제합니다.',
+      title: `1. AWS S3 · RDS 리전 격리 확인 (${domesticRegion.region})`,
+      detail: `AWS Console → S3 / RDS → 리전 선택기가 \`${domesticRegion.label} (${domesticRegion.region})\`인지 확인하고, 타 리전 버킷 복제(CRR) 규칙을 해제합니다.`,
     },
     {
-      title: '2. 고객 관리형 KMS 키(CMK) 분리 적용',
-      detail:
-        'AWS KMS → 고객 관리형 키 생성(ap-northeast-2) 후 S3 기본 암호화 및 RDS 스토리지 암호화에 연결해 해외 계정 복호화 권한을 제거합니다.',
+      title: hasForeignKms
+        ? '2. [긴급] 해외 KMS 키 통제 해제 및 국내 CMK 교체'
+        : '2. 고객 관리형 KMS 키(CMK) 분리 적용',
+      detail: `AWS KMS → 고객 관리형 키 생성(${domesticRegion.region}) 후 S3 기본 암호화 및 RDS 스토리지 암호화에 연결해 해외 계정 복호화 권한을 제거합니다.`,
     },
     ...(hasVirtualTransfer
       ? [
           {
-            title: '3. 해외 지사 IAM Role 열람 권한 차단',
-            detail:
-              'AWS IAM → 역할(Roles)에서 해외 본사/외부 계정 신뢰 관계(Trust Policy)의 프로덕션 DB·S3 읽기 권한을 제거하고 가명화된 스테이징 뷰만 허용합니다.',
+            title: '3. [긴급] 해외 지사 IAM Role 열람 권한 차단',
+            detail: `AWS IAM → 역할(Roles)에서 해외 본사/외부 계정 신뢰 관계(Trust Policy)의 프로덕션 DB·S3 읽기 권한을 제거하고 ${domesticRegion.region} 리전 외 접근을 Deny 처리합니다.`,
           },
         ]
       : []),
     ...(hasAiVendor
       ? [
           {
-            title: '4. LLM 플랫폼 Zero Data Retention(ZDR) 활성화',
+            title: `4. LLM 플랫폼 Zero Data Retention(ZDR) 활성화 (${aiVendors.map((v) => v.name).join(', ')})`,
             detail:
-              'OpenAI Platform / Anthropic Console → Data Controls 메뉴에서 API 학습 활용 비활성화(Opt-out) 및 Zero Data Retention 계약을 적용합니다.',
+              '사용 중인 LLM 플랫폼 콘솔(Data Controls / Enterprise ZDR)에서 API 학습 활용 비활성화(Opt-out) 및 Zero Data Retention 설정을 적용합니다.',
           },
         ]
       : []),
@@ -366,7 +593,8 @@ export function DualRemediationKit({
 
   return (
     <section
-      className={`rounded-xl border bg-[#0B1120] p-5 space-y-5 ${
+      id="dual-remediation-kit"
+      className={`scroll-mt-20 rounded-xl border bg-[#0B1120] p-5 space-y-5 ${
         isCleanApproved && !expandedWhenApproved
           ? 'border-emerald-800/60'
           : 'border-slate-800'
@@ -556,25 +784,37 @@ export function DualRemediationKit({
                   코드 스캔으로 알 수 없는 보유기간·세부 컬럼은 노란색 [입력 필요] 플레이스홀더로 표시됩니다.
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() =>
-                  copyText('legal-md', legalMarkdownDraft, '처리방침 국외 이전 초안')
-                }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap shrink-0"
-              >
-                {copiedId === 'legal-md' ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-300">복사됨!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>초안 복사</span>
-                  </>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {onApplyLegalDraft && (
+                  <button
+                    type="button"
+                    onClick={() => onApplyLegalDraft(legalMarkdownDraft)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>처리방침에 초안 반영</span>
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyText('legal-md', legalMarkdownDraft, '처리방침 국외 이전 초안')
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+                >
+                  {copiedId === 'legal-md' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-300">복사됨!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>초안 복사</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
             <pre className="p-4 text-xs font-mono text-slate-200 whitespace-pre-wrap leading-relaxed overflow-x-auto">
               {renderHighlightedTemplate(legalMarkdownDraft)}
@@ -683,29 +923,41 @@ export function DualRemediationKit({
                 </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  copyText(
-                    `diff-${activeDiffTab}`,
-                    activeDiffPlainText,
-                    '인프라 패치 코드',
-                  )
-                }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap shrink-0"
-              >
-                {copiedId === `diff-${activeDiffTab}` ? (
-                  <>
-                    <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-emerald-300">복사됨!</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-3.5 h-3.5" />
-                    <span>패치 코드 복사</span>
-                  </>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                {onApplySecurityFixes && (
+                  <button
+                    type="button"
+                    onClick={onApplySecurityFixes}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>보안·ZDR 설정 반영</span>
+                  </button>
                 )}
-              </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    copyText(
+                      `diff-${activeDiffTab}`,
+                      activeDiffPlainText,
+                      '인프라 패치 코드',
+                    )
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+                >
+                  {copiedId === `diff-${activeDiffTab}` ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span className="text-emerald-300">복사됨!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>패치 코드 복사</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
 
             <div className="p-3 font-mono text-xs overflow-x-auto space-y-0.5">

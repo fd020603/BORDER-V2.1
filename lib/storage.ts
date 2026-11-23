@@ -50,6 +50,20 @@ export interface StorageRepository {
   deleteCustomPolicyPack(packId: string): void;
   getDisabledPackIds(): string[];
   setDisabledPackIds(ids: string[]): void;
+  exportWorkspaceBackup(): WorkspaceBackupPayload;
+  importWorkspaceBackup(raw: unknown): { ok: true; profilesCount: number; historyCount: number } | { ok: false; error: string };
+}
+
+export interface WorkspaceBackupPayload {
+  schema_version: '2.0';
+  exported_at: string;
+  profiles: WorkspaceProfile[];
+  active_profile_id: string;
+  profile_states: Record<string, ProfileWorkspaceState>;
+  audit_history: AuditHistoryRecord[];
+  custom_packs: PolicyPackV2[];
+  disabled_pack_ids: string[];
+  llm_config: LlmConfig;
 }
 
 const STORAGE_KEYS = {
@@ -166,6 +180,12 @@ function buildSeedData(): {
       evaluated_at: profile2.updated_at,
       facts_snapshot: cloneValue(case2.facts),
       result_snapshot: result2,
+      input_snapshot: {
+        policyText: state2.policyText,
+        noPolicyDoc: state2.noPolicyDoc,
+        infraCode: state2.infraCode,
+        selectedRegions: [...state2.selectedRegions],
+      },
     },
     {
       id: 'seed-audit-1',
@@ -181,6 +201,12 @@ function buildSeedData(): {
       evaluated_at: profile1.updated_at,
       facts_snapshot: cloneValue(case1.facts),
       result_snapshot: result1,
+      input_snapshot: {
+        policyText: state1.policyText,
+        noPolicyDoc: state1.noPolicyDoc,
+        infraCode: state1.infraCode,
+        selectedRegions: [...state1.selectedRegions],
+      },
     },
   ];
 
@@ -552,6 +578,81 @@ class LocalStorageRepository implements StorageRepository {
   setDisabledPackIds(ids: string[]): void {
     this.ensureSeeded();
     this.writeRaw(STORAGE_KEYS.DISABLED_PACK_IDS, JSON.stringify(ids));
+  }
+
+  exportWorkspaceBackup(): WorkspaceBackupPayload {
+    this.ensureSeeded();
+    return {
+      schema_version: '2.0',
+      exported_at: new Date().toISOString(),
+      profiles: this.getProfiles(),
+      active_profile_id: this.getActiveProfileId(),
+      profile_states: this.readAllStates(),
+      audit_history: this.getAuditHistory(),
+      custom_packs: this.getCustomPolicyPacks(),
+      disabled_pack_ids: this.getDisabledPackIds(),
+      llm_config: this.getLlmConfig(),
+    };
+  }
+
+  importWorkspaceBackup(
+    raw: unknown,
+  ):
+    | { ok: true; profilesCount: number; historyCount: number }
+    | { ok: false; error: string } {
+    this.ensureSeeded();
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return { ok: false, error: '유효한 JSON 백업 객체가 아닙니다.' };
+    }
+    const obj = raw as Partial<WorkspaceBackupPayload>;
+    if (obj.schema_version !== '2.0' || !Array.isArray(obj.profiles) || obj.profiles.length === 0) {
+      return { ok: false, error: '지원되는 Border Checker v2.0 백업 형식이 아니거나 프로필이 비어 있습니다.' };
+    }
+
+    const validProfiles = obj.profiles.filter(
+      (p): p is WorkspaceProfile =>
+        Boolean(p && typeof p.id === 'string' && typeof p.profile_name === 'string'),
+    );
+    if (validProfiles.length === 0) {
+      return { ok: false, error: '가져올 수 있는 유효한 워크스페이스 프로필이 없습니다.' };
+    }
+
+    const states =
+      obj.profile_states && typeof obj.profile_states === 'object' && !Array.isArray(obj.profile_states)
+        ? obj.profile_states
+        : {};
+    const auditHistory = Array.isArray(obj.audit_history)
+      ? obj.audit_history.slice(0, 50)
+      : [];
+    const customPacks = Array.isArray(obj.custom_packs) ? obj.custom_packs : [];
+    const disabledIds = Array.isArray(obj.disabled_pack_ids)
+      ? obj.disabled_pack_ids.filter((id): id is string => typeof id === 'string')
+      : [];
+    const activeId =
+      typeof obj.active_profile_id === 'string' &&
+      validProfiles.some((p) => p.id === obj.active_profile_id)
+        ? obj.active_profile_id
+        : validProfiles[0].id;
+
+    this.writeRaw(STORAGE_KEYS.PROFILES, JSON.stringify(validProfiles));
+    this.writeRaw(STORAGE_KEYS.ACTIVE_PROFILE_ID, activeId);
+    this.writeRaw(STORAGE_KEYS.PROFILE_STATES, JSON.stringify(states));
+    this.writeRaw(STORAGE_KEYS.AUDIT_HISTORY, JSON.stringify(auditHistory));
+    this.writeRaw(STORAGE_KEYS.CUSTOM_PACKS, JSON.stringify(customPacks));
+    this.writeRaw(STORAGE_KEYS.DISABLED_PACK_IDS, JSON.stringify(disabledIds));
+    if (obj.llm_config && typeof obj.llm_config === 'object') {
+      this.writeRaw(
+        STORAGE_KEYS.LLM_CONFIG,
+        JSON.stringify({ ...DEFAULT_LLM_CONFIG, ...obj.llm_config }),
+      );
+    }
+
+    this.migrateLegacyPackReferences();
+    return {
+      ok: true,
+      profilesCount: validProfiles.length,
+      historyCount: auditHistory.length,
+    };
   }
 }
 

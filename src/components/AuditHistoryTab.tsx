@@ -1,20 +1,26 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Download,
   Eye,
   History,
   Printer,
   RotateCcw,
   Trash2,
   TrendingUp,
+  Upload,
   X,
 } from 'lucide-react';
+import { storageRepository } from '@/lib/storage';
 import type { AuditHistoryRecord, WorkspaceProfile } from '@/lib/types';
+import type { ToastVariant } from './Toast';
 
 interface AuditHistoryTabProps {
   activeProfile: WorkspaceProfile;
   history: AuditHistoryRecord[];
   onRestoreToStudio: (record: AuditHistoryRecord) => void;
   onDeleteRecord: (recordId: string) => void;
+  onBackupImported?: () => void;
+  onShowToast?: (message: string, variant?: ToastVariant) => void;
 }
 
 function getRecordPassMetrics(rec: AuditHistoryRecord): {
@@ -46,10 +52,66 @@ export function AuditHistoryTab({
   history,
   onRestoreToStudio,
   onDeleteRecord,
+  onBackupImported,
+  onShowToast,
 }: AuditHistoryTabProps) {
   const [scope, setScope] = useState<'profile' | 'all'>('profile');
   const [selectedSnapshot, setSelectedSnapshot] =
     useState<AuditHistoryRecord | null>(null);
+  const backupInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!selectedSnapshot) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedSnapshot(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedSnapshot]);
+
+  const handleExportBackup = () => {
+    const payload = storageRepository.exportWorkspaceBackup();
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `border-checker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+    onShowToast?.(
+      `워크스페이스 전체 백업(${payload.profiles.length}개 프로필, 이력 ${payload.audit_history.length}건)을 내보냈습니다.`,
+      'success',
+    );
+  };
+
+  const handleImportBackupFile = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const text = typeof reader.result === 'string' ? reader.result : '';
+        const parsed = JSON.parse(text) as unknown;
+        const res = storageRepository.importWorkspaceBackup(parsed);
+        if (!res.ok) {
+          onShowToast?.(res.error, 'warning');
+          return;
+        }
+        onBackupImported?.();
+        onShowToast?.(
+          `백업 복원 완료 (${res.profilesCount}개 프로필, 이력 ${res.historyCount}건)`,
+          'success',
+        );
+      } catch {
+        onShowToast?.('백업 JSON 파일을 읽을 수 없습니다.', 'warning');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const visibleRecords = useMemo(() => {
     const base =
@@ -242,18 +304,47 @@ export function AuditHistoryTab({
 
       {/* Audit History Table */}
       <section className="no-print rounded-xl border border-slate-800 bg-[#0B1120] p-5">
-        <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <h3 className="font-display text-sm font-semibold text-slate-100">
             심사 스냅샷 기록 ({visibleRecords.length}건)
           </h3>
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
-          >
-            <Printer className="w-3.5 h-3.5" />
-            <span>감사 증빙 리포트 PDF 출력</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              ref={backupInputRef}
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleImportBackupFile(file);
+                e.target.value = '';
+              }}
+            />
+            <button
+              type="button"
+              onClick={handleExportBackup}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#060913] border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
+            >
+              <Download className="w-3.5 h-3.5 text-sky-400" />
+              <span>워크스페이스 JSON 내보내기</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => backupInputRef.current?.click()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#060913] border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
+            >
+              <Upload className="w-3.5 h-3.5 text-emerald-400" />
+              <span>백업 가져오기</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>감사 증빙 리포트 PDF 출력</span>
+            </button>
+          </div>
         </div>
 
         {visibleRecords.length === 0 ? (
@@ -387,8 +478,18 @@ export function AuditHistoryTab({
 
       {/* Snapshot Detail Modal */}
       {selectedSnapshot && (
-        <div className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
-          <div className="w-full max-w-3xl max-h-[88vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden">
+        <div
+          className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setSelectedSnapshot(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="snapshot-detail-modal-title"
+            className="w-full max-w-3xl max-h-[88vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden"
+          >
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
               <div>
                 <div className="font-mono text-xs text-sky-300">
@@ -401,7 +502,10 @@ export function AuditHistoryTab({
                       : `${m.passRate}%`;
                   })()}
                 </div>
-                <h3 className="font-display text-base font-semibold text-slate-100 mt-0.5">
+                <h3
+                  id="snapshot-detail-modal-title"
+                  className="font-display text-base font-semibold text-slate-100 mt-0.5"
+                >
                   {selectedSnapshot.scenario_label}
                 </h3>
               </div>

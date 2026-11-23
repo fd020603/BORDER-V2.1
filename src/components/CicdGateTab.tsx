@@ -20,6 +20,8 @@ import type { ToastVariant } from './Toast';
 
 interface CicdGateTabProps {
   activePacks: PolicyPackV2[];
+  workspaceFacts?: CanonicalFactModel;
+  workspaceProfileName?: string;
   onShowToast?: (message: string, variant?: ToastVariant) => void;
 }
 
@@ -28,8 +30,10 @@ interface PrDiffFile {
   lines: Array<{ type: 'context' | 'remove' | 'add'; text: string }>;
 }
 
+type PrSelectionId = 'workspace' | 'pr-142-block' | 'pr-143-pass';
+
 interface PrPreset {
-  id: 'pr-142-block' | 'pr-143-pass';
+  id: PrSelectionId;
   shortLabel: string;
   prNumber: number;
   title: string;
@@ -269,15 +273,19 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Install Dependencies
+        run: npm ci
+
       - name: Run Border Checker Linter Gate
         env:
           BORDER_CHECKER_FAIL_ON: 'BLOCKER,DRIFT'
         run: |
-          npx border-checker-cli scan \\
+          npm run lint:border -- \\
             --deps package.json \\
             --infra infra/main.tf \\
             --policy docs/privacy-policy.md \\
             --packs KR_PIPA_v2,EU_GDPR_v2,JP_APPI_v2,CN_PIPL_v2,US_CLOUD_ACT_v2,US_CCPA_CPRA_v2,KR_AI_BASIC_ACT_v2,EU_AI_ACT_v2 \\
+            --fail-on BLOCKER,DRIFT \\
             --output pr-comment.md
 
       - name: Post PR Review Comment
@@ -295,15 +303,97 @@ jobs:
             });
 `;
 
-export function CicdGateTab({ activePacks, onShowToast }: CicdGateTabProps) {
-  const [selectedPrId, setSelectedPrId] = useState<'pr-142-block' | 'pr-143-pass'>(
-    'pr-142-block',
+export function CicdGateTab({
+  activePacks,
+  workspaceFacts,
+  workspaceProfileName = '현재 워크스페이스',
+  onShowToast,
+}: CicdGateTabProps) {
+  const [selectedPrId, setSelectedPrId] = useState<PrSelectionId>(
+    workspaceFacts ? 'workspace' : 'pr-142-block',
   );
   const [mergedSuccess, setMergedSuccess] = useState(false);
   const [copiedYaml, setCopiedYaml] = useState(false);
 
+  const allPrOptions = useMemo<PrPreset[]>(() => {
+    if (!workspaceFacts) return PR_PRESETS;
+
+    const activeVendors = workspaceFacts.transfers.detected_vendors.filter(
+      (v) => (v.includes_pii ?? v.sends_pii) !== false,
+    );
+    const workspacePreset: PrPreset = {
+      id: 'workspace',
+      shortLabel: `현재 워크스페이스 실시간 검증 (${workspaceProfileName})`,
+      prNumber: 144,
+      title: `audit: Verify ${workspaceProfileName} sovereignty & policy drift`,
+      author: 'workspace-live',
+      branch: 'feat/live-workspace-audit',
+      baseBranch: 'main',
+      commitHash: 'live-head',
+      timestamp: 'just now',
+      files: [
+        {
+          filename: 'package.json',
+          lines: [
+            { type: 'context', text: '  "dependencies": {' },
+            ...(activeVendors.length > 0
+              ? activeVendors.map((v) => ({
+                  type: 'add' as const,
+                  text: `    "${v.sdk}": "active", // ${v.data_residency_country || v.country} (${v.transfer_purpose})`,
+                }))
+              : [{ type: 'context' as const, text: '    // 외부 PII 전송 SDK 없음' }]),
+            { type: 'context', text: '  }' },
+          ],
+        },
+        {
+          filename: 'infra/main.tf',
+          lines: [
+            {
+              type: 'context',
+              text: `// business_country = "${workspaceFacts.workspace.business_country}"`,
+            },
+            {
+              type: workspaceFacts.transfers.destination_countries.length > 0 ? 'add' : 'context',
+              text: `// destination_countries = [${workspaceFacts.transfers.destination_countries.join(', ') || 'DOMESTIC_ONLY'}]`,
+            },
+            {
+              type:
+                workspaceFacts.transfers.virtual_transfer.foreign_iam_access ||
+                workspaceFacts.transfers.virtual_transfer.foreign_kms_control
+                  ? 'add'
+                  : 'context',
+              text: `// foreign_iam=${workspaceFacts.transfers.virtual_transfer.foreign_iam_access}, foreign_kms=${workspaceFacts.transfers.virtual_transfer.foreign_kms_control}`,
+            },
+            {
+              type:
+                workspaceFacts.security.encryption_in_transit &&
+                workspaceFacts.security.encryption_at_rest
+                  ? 'context'
+                  : 'remove',
+              text: `// tls=${workspaceFacts.security.encryption_in_transit}, at_rest=${workspaceFacts.security.encryption_at_rest}, pii_masked=${workspaceFacts.security.pii_masked_before_transfer}`,
+            },
+          ],
+        },
+        {
+          filename: 'docs/privacy-policy.md',
+          lines: [
+            {
+              type: workspaceFacts.legal_doc.exists ? 'context' : 'remove',
+              text: workspaceFacts.legal_doc.exists
+                ? `// 처리방침 존재 · 위탁고지=${workspaceFacts.legal_doc.has_entrustment_disclosure} · 공개국가=[${workspaceFacts.legal_doc.disclosed_countries.join(', ')}]`
+                : '// 개인정보 처리방침 문서 미등록 상태',
+            },
+          ],
+        },
+      ],
+      facts: workspaceFacts,
+    };
+
+    return [workspacePreset, ...PR_PRESETS];
+  }, [workspaceFacts, workspaceProfileName]);
+
   const selectedPr =
-    PR_PRESETS.find((p) => p.id === selectedPrId) ?? PR_PRESETS[0];
+    allPrOptions.find((p) => p.id === selectedPrId) ?? allPrOptions[0];
 
   const evaluation = useMemo(() => {
     return evaluateFacts(selectedPr.facts, activePacks);
@@ -314,7 +404,7 @@ export function CicdGateTab({ activePacks, onShowToast }: CicdGateTabProps) {
     evaluation.verdict === 'DRIFT_DETECTED' ||
     evaluation.stats.blocker_count > 0;
 
-  const handleSelectPr = (id: 'pr-142-block' | 'pr-143-pass') => {
+  const handleSelectPr = (id: PrSelectionId) => {
     setSelectedPrId(id);
     setMergedSuccess(false);
   };
@@ -366,7 +456,7 @@ export function CicdGateTab({ activePacks, onShowToast }: CicdGateTabProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 shrink-0">
-          {PR_PRESETS.map((pr) => {
+          {allPrOptions.map((pr) => {
             const active = pr.id === selectedPr.id;
             return (
               <button

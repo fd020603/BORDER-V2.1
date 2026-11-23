@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   CheckCircle2,
   Download,
@@ -13,6 +13,7 @@ import {
   CANONICAL_FACT_KEYS,
   DSL_OPERATORS,
   VENDOR_MATCH_FIELDS,
+  type DriftType,
   type DslOperator,
   type PolicyLayer,
   type PolicyPackV2,
@@ -30,6 +31,13 @@ interface PolicyPacksTabProps {
 }
 
 const ALLOWED_OPERATORS = new Set<DslOperator>(DSL_OPERATORS);
+const ALLOWED_DRIFT_TYPES = new Set<DriftType>([
+  'DOMESTIC_CLAIM_CONTRADICTION',
+  'UNDISCLOSED_COUNTRY',
+  'UNDISCLOSED_VENDOR',
+  'VIRTUAL_TRANSFER_OMISSION',
+  'SAFEGUARD_CLAIM_MISMATCH',
+]);
 
 interface PolicyPackTemplateWithSpec extends PolicyPackV2 {
   canonical_fact_dictionary_ssot: {
@@ -138,8 +146,11 @@ export function validatePolicyPackV2(
   if (![1, 2, 3, 4].includes(Number(meta.layer))) {
     return { ok: false, error: '`pack_meta.layer`는 1~4 중 하나여야 합니다.' };
   }
-  if (typeof meta.country_code !== 'string' || typeof meta.law_name !== 'string') {
+  if (typeof meta.country_code !== 'string' || !meta.country_code.trim() || typeof meta.law_name !== 'string' || !meta.law_name.trim()) {
     return { ok: false, error: '`pack_meta.country_code` 및 `law_name`이 필요합니다.' };
+  }
+  if (typeof meta.version !== 'string' || !meta.version.trim()) {
+    return { ok: false, error: '`pack_meta.version` 문자열이 필요합니다.' };
   }
   if (!obj.applicability || typeof obj.applicability !== 'object' || Array.isArray(obj.applicability)) {
     return { ok: false, error: '`applicability` 조건 트리가 필요합니다.' };
@@ -149,24 +160,35 @@ export function validatePolicyPackV2(
   }
 
   const checkDslOperators = (node: unknown): string | null => {
-    if (!node || typeof node !== 'object') return '잘못된 condition_dsl 노드입니다.';
+    if (!node || typeof node !== 'object' || Array.isArray(node)) {
+      return '잘못된 condition_dsl 노드입니다.';
+    }
     const n = node as Record<string, unknown>;
-    if (Array.isArray(n.all)) {
+    if ('all' in n) {
+      if (!Array.isArray(n.all) || n.all.length === 0) {
+        return '`all` 조건 배열에는 최소 1개 이상의 하위 노드가 필요합니다.';
+      }
       for (const child of n.all) {
         const err = checkDslOperators(child);
         if (err) return err;
       }
       return null;
     }
-    if (Array.isArray(n.any)) {
+    if ('any' in n) {
+      if (!Array.isArray(n.any) || n.any.length === 0) {
+        return '`any` 조건 배열에는 최소 1개 이상의 하위 노드가 필요합니다.';
+      }
       for (const child of n.any) {
         const err = checkDslOperators(child);
         if (err) return err;
       }
       return null;
     }
-    if (n.not) return checkDslOperators(n.not);
-    if (typeof n.fact !== 'string' || !ALLOWED_OPERATORS.has(n.operator as DslOperator)) {
+    if ('not' in n) {
+      if (!n.not) return '`not` 조건 노드가 비어 있습니다.';
+      return checkDslOperators(n.not);
+    }
+    if (typeof n.fact !== 'string' || !n.fact.trim() || !ALLOWED_OPERATORS.has(n.operator as DslOperator)) {
       return `허용되지 않은 DSL 연산자(${String(n.operator)}) 또는 fact 누락이 발견되었습니다.`;
     }
     return null;
@@ -188,7 +210,7 @@ export function validatePolicyPackV2(
 
   for (const rule of obj.rules) {
     const r = rule as Record<string, unknown>;
-    if (typeof r.rule_id !== 'string' || typeof r.plain_title !== 'string') {
+    if (typeof r.rule_id !== 'string' || !r.rule_id.trim() || typeof r.plain_title !== 'string' || !r.plain_title.trim()) {
       return { ok: false, error: '각 룰에는 `rule_id`와 `plain_title`이 필요합니다.' };
     }
     if (r.severity !== 'BLOCKER' && r.severity !== 'WARNING') {
@@ -203,6 +225,15 @@ export function validatePolicyPackV2(
       }
       const driftObj = r.drift_check as Record<string, unknown>;
       if (
+        driftObj.drift_type !== undefined &&
+        !ALLOWED_DRIFT_TYPES.has(driftObj.drift_type as DriftType)
+      ) {
+        return {
+          ok: false,
+          error: `룰 ${r.rule_id}: 허용되지 않은 drift_type (${String(driftObj.drift_type)})`,
+        };
+      }
+      if (
         driftObj.enabled !== false &&
         driftObj.condition !== undefined &&
         !isEmptyPlainObject(driftObj.condition)
@@ -214,6 +245,22 @@ export function validatePolicyPackV2(
             error: `룰 ${r.rule_id}의 drift_check.condition: ${driftCondErr}`,
           };
         }
+      }
+    }
+
+    if (r.remediation !== undefined && r.remediation !== null) {
+      if (typeof r.remediation !== 'object' || Array.isArray(r.remediation)) {
+        return { ok: false, error: `룰 ${r.rule_id}: remediation은 객체여야 합니다.` };
+      }
+      const remObj = r.remediation as Record<string, unknown>;
+      if (
+        (remObj.legal_template !== undefined && typeof remObj.legal_template !== 'string') ||
+        (remObj.infra_patch_hint !== undefined && typeof remObj.infra_patch_hint !== 'string')
+      ) {
+        return {
+          ok: false,
+          error: `룰 ${r.rule_id}: remediation 필드는 문자열이어야 합니다.`,
+        };
       }
     }
   }
@@ -246,6 +293,17 @@ export function PolicyPacksTab({
     type: 'success' | 'error';
     message: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (!inspectedPack) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setInspectedPack(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [inspectedPack]);
 
   const builtInRefSet = new Set(builtInPacks);
   const { supersededPackIds } = resolvePackCatalog(
@@ -549,15 +607,28 @@ export function PolicyPacksTab({
 
       {/* Ruleset Inspector Modal */}
       {inspectedPack && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
-          <div className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setInspectedPack(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="pack-inspector-modal-title"
+            className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden"
+          >
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
               <div>
                 <div className="font-mono text-xs text-sky-300">
                   Layer {inspectedPack.pack_meta.layer} · {inspectedPack.pack_meta.id} · v
                   {inspectedPack.pack_meta.version}
                 </div>
-                <h3 className="font-display text-base font-semibold text-slate-100 mt-0.5">
+                <h3
+                  id="pack-inspector-modal-title"
+                  className="font-display text-base font-semibold text-slate-100 mt-0.5"
+                >
                   {inspectedPack.pack_meta.law_name}
                 </h3>
               </div>

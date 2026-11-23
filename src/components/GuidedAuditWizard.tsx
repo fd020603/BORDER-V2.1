@@ -31,6 +31,7 @@ import {
   scanDependencyFile,
 } from '@/lib/dependency-scanner';
 import { resolveRequiredPacks } from '@/lib/pack-loader';
+import { computeEffectiveHasCrossBorder } from '@/lib/rule-evaluator';
 import { lookupSdkMetadata } from '@/lib/sdk-registry';
 import {
   RESIDENCY_REGION_OPTIONS,
@@ -209,13 +210,12 @@ export function GuidedAuditWizard({
         industry_domain: industryDomain,
       },
       transfers: {
-        has_cross_border:
-          destCountries.length > 0 ||
-          activeVendors.some(
-            (v) =>
-              (v.data_residency_country || v.country).toUpperCase() !==
-              businessCountry.toUpperCase(),
-          ),
+        has_cross_border: computeEffectiveHasCrossBorder(
+          destCountries,
+          activeVendors,
+          businessCountry,
+          virtualTransfer,
+        ),
         destination_countries: destCountries,
         detected_vendors: detectedVendors,
         virtual_transfer: virtualTransfer,
@@ -235,6 +235,8 @@ export function GuidedAuditWizard({
         disclosed_dest_country_law_info: false,
         has_scc_or_safeguard_notice: false,
         has_ai_training_opt_out_notice: false,
+        has_ai_service_notice: false,
+        has_ai_output_label_notice: false,
         has_do_not_sell_or_share_notice: false,
       },
     };
@@ -264,7 +266,7 @@ export function GuidedAuditWizard({
   const handleScanText = (fileName: string, content: string) => {
     const scan = scanDependencyFile(fileName, content);
     onApplyScannedVendors(scan.detectedVendors, scan.detectedRegions);
-    const msg = `${fileName} 스캔 완료 · 탐지된 외부 서비스 ${scan.detectedVendors.length}종`;
+    const msg = `${fileName} 스캔 완료 · 탐지된 외부 서비스 ${scan.detectedVendors.length}종 (기존 목록과 병합됨)`;
     setLastScanNotice(msg);
     onShowToast?.(msg, 'success');
   };

@@ -129,12 +129,12 @@ export function InputStudio({
     const scan = scanDependencyFile(fileName, content);
     onApplyScannedVendors(scan.detectedVendors, scan.detectedRegions);
     const msg =
-      `${fileName} (${scan.fileType}) 스캔 완료 · 탐지된 SDK ${scan.detectedVendors.length}종` +
+      `${fileName} (${scan.fileType}) 스캔 완료 · 탐지된 SDK ${scan.detectedVendors.length}종 (기존 목록과 병합됨)` +
       (scan.unknownPackages.length > 0
         ? ` · 미등록 패키지 ${scan.unknownPackages.length}개`
         : '');
     setLastScanNotice(msg);
-    onShowToast?.(`${fileName} 스캔 완료 (SDK ${scan.detectedVendors.length}종 탐지)`, 'success');
+    onShowToast?.(`${fileName} 스캔 완료 (SDK ${scan.detectedVendors.length}종 병합됨)`, 'success');
   };
 
   const handleFileUpload = (file: File) => {

@@ -260,15 +260,16 @@
       "severity": "BLOCKER",
       "article_citation": "GDPR Art. 9(1), Art. 9(2)(a), Art. 13(1)(c), Art. 13(2)(c)",
       "plain_title": "헬스케어(특수범주 개인정보) 처리 시 명시적 동의·위탁 고지 및 수집 항목 누락 탐지",
-      "plain_explanation": "건강 정보 등 GDPR 제9조 특수범주 개인정보 처리 가능성이 높은 헬스케어 도메인에서 BAA 미지원 벤더로 개인정보가 전송되고 있으나, 별도 명시적 동의 및 처리위탁·수집 항목 고지가 확인되지 않았습니다.",
+      "plain_explanation": "건강 정보 등 GDPR 제9조 특수범주 개인정보 처리 가능성이 높은 헬스케어 도메인에서 비식별화되지 않은 개인정보가 외부 벤더로 전송되고 있으나, 별도 명시적 동의 및 처리위탁·수집 항목 고지가 확인되지 않았습니다.",
       "condition_dsl": {
         "all": [
           { "fact": "workspace.industry_domain", "operator": "equals", "value": "HEALTHCARE" },
           {
             "fact": "transfers.detected_vendors",
             "operator": "any_vendor_matches",
-            "value": { "includes_pii": true, "baa_supported": false }
+            "value": { "includes_pii": true }
           },
+          { "fact": "security.pii_masked_before_transfer", "operator": "equals", "value": false },
           { "fact": "legal_doc.has_separate_consent", "operator": "equals", "value": false },
           {
             "any": [
@@ -285,7 +286,7 @@
       },
       "remediation": {
         "legal_template": "당사는 [입력 필요: 건강/생체 등 특수범주 개인정보 항목]을 GDPR 제9조 제2항 (a)호에 따른 귀하의 별도 명시적 동의([입력 필요: 또는 제9조 제2항 (h)호 등 법정 예외 근거])에 기반하여 [입력 필요: 구체적 처리 목적]을 위해서만 처리합니다. 귀하는 언제든지 [입력 필요: 동의 철회 경로]를 통해 동의를 철회할 수 있습니다.",
-        "infra_patch_hint": "특수범주 개인정보 수집 화면에 일반 약관과 분리된 별도 체크박스(명시적 동의)를 구현하고, BAA/DPA를 지원하는 수탁사를 사용하며 전송 전 불필요한 민감 필드를 제거·가명처리하세요."
+        "infra_patch_hint": "특수범주 개인정보 수집 화면에 일반 약관과 분리된 별도 체크박스(명시적 동의)를 구현하고, DPA(데이터 처리 협정) 체결 수탁사를 사용하며 전송 전 불필요한 민감 필드를 가명·비식별화하세요."
       }
     },
     {

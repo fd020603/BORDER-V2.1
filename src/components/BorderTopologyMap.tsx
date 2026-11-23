@@ -177,7 +177,7 @@ export function BorderTopologyMap({
             strokeWidth="2"
             markerEnd="url(#arrow-domestic)"
           />
-          <circle r="3.5" fill={domesticStroke}>
+          <circle r="3.5" fill={domesticStroke} className="motion-reduce-hidden">
             <animateMotion dur="2s" repeatCount="indefinite" path="M 204 135 L 252 135" />
           </circle>
 
@@ -190,7 +190,7 @@ export function BorderTopologyMap({
             strokeWidth="2"
             markerEnd="url(#arrow-domestic)"
           />
-          <circle r="3.5" fill={domesticStroke}>
+          <circle r="3.5" fill={domesticStroke} className="motion-reduce-hidden">
             <animateMotion dur="2s" repeatCount="indefinite" path="M 434 135 L 482 135" />
           </circle>
 
@@ -205,7 +205,7 @@ export function BorderTopologyMap({
             markerEnd="url(#arrow-border)"
           />
           {hasCrossBorder && (
-            <circle r="4" fill={crossBorderStroke}>
+            <circle r="4" fill={crossBorderStroke} className="motion-reduce-hidden">
               <animateMotion
                 dur="1.8s"
                 repeatCount="indefinite"
@@ -225,7 +225,7 @@ export function BorderTopologyMap({
             markerEnd="url(#arrow-border)"
           />
           {hasVirtualTransfer && (
-            <circle r="4" fill="#f43f5e">
+            <circle r="4" fill="#f43f5e" className="motion-reduce-hidden">
               <animateMotion
                 dur="1.4s"
                 repeatCount="indefinite"
@@ -400,7 +400,15 @@ export function BorderTopologyMap({
                 fontSize="10"
                 fontFamily="JetBrains Mono, monospace"
               >
-                + {regionLabels.length - 1}개 추가 리전 ({regionLabels[1]?.split(' ')[0]})
+                <title>{regionLabels.join(', ')}</title>
+                {(() => {
+                  const extra = regionLabels
+                    .slice(1)
+                    .map((l) => l.split(' ')[0])
+                    .join(', ');
+                  const text = `+${regionLabels.length - 1} (${extra})`;
+                  return text.length > 26 ? `${text.slice(0, 25)}…` : text;
+                })()}
               </text>
             )}
             <text x="498" y="182" fill="#94a3b8" fontSize="10.5">

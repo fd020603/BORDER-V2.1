@@ -63,7 +63,7 @@
                 "value": false
               },
               {
-                "fact": "legal_doc.has_ai_training_opt_out_notice",
+                "fact": "legal_doc.has_ai_service_notice",
                 "operator": "equals",
                 "value": false
               }
@@ -88,13 +88,13 @@
               "value": true
             },
             {
-              "fact": "legal_doc.has_ai_training_opt_out_notice",
+              "fact": "legal_doc.has_ai_service_notice",
               "operator": "equals",
               "value": false
             }
           ]
         },
-        "alert_message": "Policy-Infra Drift 감지: 실제 코드에는 외부 AI API/SDK가 연동되어 있으나, 공개된 처리방침·약관 문서에는 AI 기반 서비스 운용 및 데이터 처리 관련 고지가 누락되어 있습니다."
+        "alert_message": "Policy-Infra Drift 감지: 실제 코드에는 외부 AI API/SDK가 연동되어 있으나, 공개된 처리방침·약관 문서에는 AI 기반 서비스 운용 사전 고지가 누락되어 있습니다."
       },
       "remediation": {
         "legal_template": "[인공지능 기반 서비스 이용 사전 고지]\n본 서비스의 [입력 필요: AI 기능명(예: 문서 요약, 챗봇 응답 등)]은(는) [입력 필요: 연동된 AI 모델/제공사업자명]의 생성형 인공지능 기술에 기반하여 운용됩니다. 이용자는 서비스 이용 전 해당 기능이 인공지능에 의해 제공됨을 안내받습니다.",
@@ -134,7 +134,7 @@
                 "value": false
               },
               {
-                "fact": "legal_doc.has_ai_training_opt_out_notice",
+                "fact": "legal_doc.has_ai_output_label_notice",
                 "operator": "equals",
                 "value": false
               },

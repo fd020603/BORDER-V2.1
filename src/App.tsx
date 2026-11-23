@@ -16,7 +16,10 @@ import {
   parseInputsToFacts,
 } from '@/lib/llm-parser';
 import { resolvePackCatalog } from '@/lib/pack-loader';
-import { evaluateFacts } from '@/lib/rule-evaluator';
+import {
+  computeEffectiveHasCrossBorder,
+  evaluateFacts,
+} from '@/lib/rule-evaluator';
 import {
   storageRepository,
   type ProfileWorkspaceState,
@@ -161,11 +164,12 @@ function buildTransfersFromWorkspace(state: ProfileWorkspaceState): CanonicalFac
     ),
   );
 
-  const hasCrossBorder =
-    destinationCountries.length > 0 ||
-    activeVendors.some(
-      (v) => v.data_residency_country.toUpperCase() !== businessCountry,
-    );
+  const hasCrossBorder = computeEffectiveHasCrossBorder(
+    destinationCountries,
+    activeVendors,
+    businessCountry,
+    state.virtualTransfer,
+  );
 
   return {
     has_cross_border: hasCrossBorder,
@@ -215,6 +219,10 @@ function buildFactsFromWorkspace(state: ProfileWorkspaceState): CanonicalFactMod
         heuristic.legal_doc?.has_scc_or_safeguard_notice ?? false,
       has_ai_training_opt_out_notice:
         heuristic.legal_doc?.has_ai_training_opt_out_notice ?? false,
+      has_ai_service_notice:
+        heuristic.legal_doc?.has_ai_service_notice ?? false,
+      has_ai_output_label_notice:
+        heuristic.legal_doc?.has_ai_output_label_notice ?? false,
       has_do_not_sell_or_share_notice:
         heuristic.legal_doc?.has_do_not_sell_or_share_notice ?? false,
     },
@@ -522,8 +530,47 @@ export default function App() {
     const scenarioRegions: string[] = [];
     if (clonedFacts.transfers.destination_countries.includes('JP')) {
       scenarioRegions.push('aws-tokyo');
-    } else if (clonedFacts.workspace.business_country === 'KR') {
+    }
+    if (clonedFacts.transfers.destination_countries.includes('US')) {
+      scenarioRegions.push('aws-virginia');
+    }
+    if (
+      clonedFacts.transfers.destination_countries.includes('KR') ||
+      clonedFacts.workspace.business_country === 'KR'
+    ) {
       scenarioRegions.push('aws-seoul');
+    }
+    if (scenarioRegions.length === 0) {
+      scenarioRegions.push('aws-seoul');
+    }
+
+    const infraLines: string[] = [];
+    if (clonedFacts.transfers.destination_countries.includes('US')) {
+      infraLines.push('provider "aws" {', '  region = "us-east-1"', '}');
+    } else if (clonedFacts.transfers.destination_countries.includes('JP')) {
+      infraLines.push('provider "aws" {', '  region = "ap-northeast-1"', '}');
+    } else {
+      infraLines.push('provider "aws" {', '  region = "ap-northeast-2"', '}');
+    }
+    if (
+      clonedFacts.transfers.virtual_transfer.foreign_iam_access ||
+      clonedFacts.transfers.virtual_transfer.foreign_kms_control
+    ) {
+      infraLines.push(
+        'resource "aws_iam_role_policy" "us_hq_access" {',
+        `  foreign_iam_access = ${clonedFacts.transfers.virtual_transfer.foreign_iam_access}`,
+        clonedFacts.transfers.virtual_transfer.foreign_kms_control
+          ? '  kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/hq-key"'
+          : '  kms_key_id = "arn:aws:kms:ap-northeast-2:123456789012:key/local-key"',
+        '}',
+      );
+    }
+    if (!clonedFacts.security.encryption_in_transit || !clonedFacts.security.encryption_at_rest) {
+      infraLines.push(
+        '# Security check flags',
+        `# encryption_in_transit=${clonedFacts.security.encryption_in_transit}`,
+        `# encryption_at_rest=${clonedFacts.security.encryption_at_rest}`,
+      );
     }
 
     const result = evaluateFacts(clonedFacts, activePacks);
@@ -532,23 +579,11 @@ export default function App() {
       businessCountry: clonedFacts.workspace.business_country,
       dataSubjectCountries: [...clonedFacts.workspace.data_subject_countries],
       industryDomain: clonedFacts.workspace.industry_domain,
-      selectedRegions: scenarioRegions,
+      selectedRegions: Array.from(new Set(scenarioRegions)),
       detectedVendors: clonedFacts.transfers.detected_vendors,
       policyText: scenario.sample_privacy_policy,
       noPolicyDoc: !clonedFacts.legal_doc.exists,
-      infraCode: clonedFacts.transfers.virtual_transfer.foreign_iam_access
-        ? [
-            'provider "aws" {',
-            '  region = "ap-northeast-2"',
-            '}',
-            'resource "aws_iam_role_policy" "us_hq_access" {',
-            '  foreign_iam_access = true',
-            '  kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/hq-key"',
-            '}',
-          ].join('\n')
-        : clonedFacts.transfers.destination_countries.includes('JP')
-          ? 'provider "aws" {\n  region = "ap-northeast-1"\n}'
-          : 'provider "aws" {\n  region = "ap-northeast-2"\n}',
+      infraCode: infraLines.join('\n'),
       virtualTransfer: clonedFacts.transfers.virtual_transfer,
       security: clonedFacts.security,
       lastResult: result,
@@ -577,6 +612,12 @@ export default function App() {
       evaluated_at: result.evaluated_at,
       facts_snapshot: clonedFacts,
       result_snapshot: result,
+      input_snapshot: {
+        policyText: nextState.policyText,
+        noPolicyDoc: nextState.noPolicyDoc,
+        infraCode: nextState.infraCode,
+        selectedRegions: [...nextState.selectedRegions],
+      },
     };
     storageRepository.appendAuditHistory(record);
     setHistory(storageRepository.getAuditHistory());
@@ -658,6 +699,12 @@ export default function App() {
         evaluated_at: result.evaluated_at,
         facts_snapshot: parsedOutput.parsedFacts,
         result_snapshot: result,
+        input_snapshot: {
+          policyText: nextState.policyText,
+          noPolicyDoc: nextState.noPolicyDoc,
+          infraCode: nextState.infraCode,
+          selectedRegions: [...nextState.selectedRegions],
+        },
       };
       storageRepository.appendAuditHistory(record);
       setHistory(storageRepository.getAuditHistory());
@@ -694,7 +741,6 @@ export default function App() {
     dataSubjectCountries?: string[];
     industryDomain?: IndustryDomain;
   }) => {
-    setIsDirty(true);
     const nextState: ProfileWorkspaceState = {
       ...workspaceState,
       businessCountry: patch.businessCountry ?? workspaceState.businessCountry,
@@ -718,7 +764,6 @@ export default function App() {
 
   const handleToggleRegion = (regionId: string) => {
     setOverrideFacts(null);
-    setIsDirty(true);
     const exists = workspaceState.selectedRegions.includes(regionId);
     const nextRegions = exists
       ? workspaceState.selectedRegions.filter((id) => id !== regionId)
@@ -728,7 +773,6 @@ export default function App() {
 
   const handleToggleSaasPreset = (sdk: string) => {
     setOverrideFacts(null);
-    setIsDirty(true);
     const exists = workspaceState.detectedVendors.some((v) => v.sdk === sdk);
     let nextVendors: DetectedVendor[];
     if (exists) {
@@ -746,14 +790,23 @@ export default function App() {
     scannedRegions: string[],
   ) => {
     setOverrideFacts(null);
-    setIsDirty(true);
     const mergedRegions = Array.from(
       new Set([...workspaceState.selectedRegions, ...scannedRegions]),
     );
+    const existingBySdk = new Map(
+      workspaceState.detectedVendors.map((v) => [v.sdk, v]),
+    );
+    const mergedVendors: DetectedVendor[] = [...workspaceState.detectedVendors];
+    for (const scanned of scannedVendors) {
+      if (!existingBySdk.has(scanned.sdk)) {
+        mergedVendors.push(scanned);
+        existingBySdk.set(scanned.sdk, scanned);
+      }
+    }
     persistWorkspace(
       {
         ...workspaceState,
-        detectedVendors: scannedVendors,
+        detectedVendors: mergedVendors,
         selectedRegions: mergedRegions,
       },
       true,
@@ -761,7 +814,6 @@ export default function App() {
   };
 
   const handleToggleVendorPii = (sdk: string) => {
-    setIsDirty(true);
     const nextVendors = workspaceState.detectedVendors.map((v) => {
       if (v.sdk !== sdk) return v;
       const current = (v.includes_pii ?? v.sends_pii) !== false;
@@ -772,7 +824,6 @@ export default function App() {
   };
 
   const handleChangeVendorPurpose = (sdk: string, purpose: TransferPurpose) => {
-    setIsDirty(true);
     const nextVendors = workspaceState.detectedVendors.map((v) =>
       v.sdk === sdk ? { ...v, transfer_purpose: purpose } : v,
     );
@@ -782,7 +833,6 @@ export default function App() {
   const handleChangeVendorResidency = (sdk: string, residencyCountry: string) => {
     const normalized = residencyCountry.trim().toUpperCase();
     if (!normalized) return;
-    setIsDirty(true);
     const nextVendors = workspaceState.detectedVendors.map((v) => {
       if (v.sdk !== sdk) return v;
       const defaultCountry = (v.default_country || v.country || 'US').toUpperCase();
@@ -797,7 +847,6 @@ export default function App() {
   };
 
   const handleRemoveVendor = (sdk: string) => {
-    setIsDirty(true);
     const nextVendors = workspaceState.detectedVendors.filter(
       (v) => v.sdk !== sdk,
     );
@@ -823,7 +872,6 @@ export default function App() {
   };
 
   const handleChangeVirtualTransfer = (patch: Partial<VirtualTransferFacts>) => {
-    setIsDirty(true);
     persistWorkspace(
       {
         ...workspaceState,
@@ -839,7 +887,6 @@ export default function App() {
   const handleChangeSecurity = (
     patch: Partial<CanonicalFactModel['security']>,
   ) => {
-    setIsDirty(true);
     persistWorkspace(
       {
         ...workspaceState,
@@ -855,27 +902,147 @@ export default function App() {
       storageRepository.setActiveProfileId(targetProfile.id);
       setActiveProfileId(targetProfile.id);
     }
-    setOverrideFacts(cloneValue(record.facts_snapshot));
-    setIsDirty(false);
-    setWorkspaceState((prev) => ({
-      ...prev,
+
+    const snapshot = record.input_snapshot;
+    const derivedRegions = (() => {
+      if (snapshot?.selectedRegions?.length) {
+        return [...snapshot.selectedRegions];
+      }
+      const next: string[] = [];
+      if (record.facts_snapshot.transfers.destination_countries.includes('JP')) {
+        next.push('aws-tokyo');
+      }
+      if (record.facts_snapshot.transfers.destination_countries.includes('US')) {
+        next.push('aws-virginia');
+      }
+      if (
+        record.facts_snapshot.workspace.business_country === 'KR' ||
+        next.length === 0
+      ) {
+        next.push('aws-seoul');
+      }
+      return Array.from(new Set(next));
+    })();
+
+    const nextState: ProfileWorkspaceState = {
+      ...workspaceState,
       profileId: record.profile_id,
       businessCountry: record.facts_snapshot.workspace.business_country,
       dataSubjectCountries: [
         ...record.facts_snapshot.workspace.data_subject_countries,
       ],
       industryDomain: record.facts_snapshot.workspace.industry_domain,
+      selectedRegions: derivedRegions,
       detectedVendors: cloneValue(
         record.facts_snapshot.transfers.detected_vendors,
       ),
+      policyText:
+        snapshot?.policyText ??
+        (record.facts_snapshot.legal_doc.exists
+          ? workspaceState.policyText
+          : ''),
+      noPolicyDoc:
+        snapshot?.noPolicyDoc ?? !record.facts_snapshot.legal_doc.exists,
+      infraCode: snapshot?.infraCode ?? workspaceState.infraCode,
       virtualTransfer: cloneValue(
         record.facts_snapshot.transfers.virtual_transfer,
       ),
       security: cloneValue(record.facts_snapshot.security),
       lastResult: record.result_snapshot,
-    }));
+      updatedAt: new Date().toISOString(),
+    };
+
+    setOverrideFacts(cloneValue(record.facts_snapshot));
+    setActiveScenarioId(null);
+    setIsDirty(false);
+    setWorkspaceState(nextState);
+    storageRepository.saveProfileState(nextState);
     setActiveTab('live-audit');
     showToast(`이력 스냅샷 복원됨: ${record.scenario_label}`, 'info');
+  };
+
+  const handleApplyLegalDraft = (markdownDraft: string) => {
+    setOverrideFacts(null);
+    const trimmedExisting = workspaceState.policyText.trim();
+    const marker = '### 제○조 (개인정보의 국외 이전에 관한 사항)';
+    let nextPolicyText = markdownDraft;
+    if (trimmedExisting.length > 0) {
+      const markerIdx = trimmedExisting.indexOf(marker);
+      if (markerIdx >= 0) {
+        nextPolicyText = `${trimmedExisting.slice(0, markerIdx).trimEnd()}\n\n${markdownDraft}`.trim();
+      } else {
+        nextPolicyText = `${trimmedExisting}\n\n${markdownDraft}`;
+      }
+    }
+
+    const nextState: ProfileWorkspaceState = {
+      ...workspaceState,
+      policyText: nextPolicyText,
+      noPolicyDoc: false,
+      lastEngineUsed: 'HEURISTIC_FALLBACK',
+    };
+    const nextFacts = buildFactsFromWorkspace(nextState);
+    const finalState: ProfileWorkspaceState = {
+      ...nextState,
+      lastResult: evaluateFacts(nextFacts, activePacks),
+      updatedAt: new Date().toISOString(),
+    };
+    setWorkspaceState(finalState);
+    storageRepository.saveProfileState(finalState);
+    setIsDirty(false);
+    showToast(
+      '개정 처리방침 초안이 워크스페이스에 반영되어 재심사되었습니다.',
+      'success',
+    );
+  };
+
+  const handleApplySecurityFixes = () => {
+    setOverrideFacts(null);
+    const nextVendors = workspaceState.detectedVendors.map((v) =>
+      v.category === 'AI' ? { ...v, zero_data_retention: true } : v,
+    );
+    const nextState: ProfileWorkspaceState = {
+      ...workspaceState,
+      detectedVendors: nextVendors,
+      security: {
+        encryption_in_transit: true,
+        encryption_at_rest: true,
+        pii_masked_before_transfer: true,
+      },
+    };
+    const nextFacts = buildFactsFromWorkspace(nextState);
+    const finalState: ProfileWorkspaceState = {
+      ...nextState,
+      lastResult: evaluateFacts(nextFacts, activePacks),
+      updatedAt: new Date().toISOString(),
+    };
+    setWorkspaceState(finalState);
+    storageRepository.saveProfileState(finalState);
+    setIsDirty(false);
+    showToast(
+      '전송·저장 암호화, PII 마스킹 및 AI ZDR 설정이 워크스페이스에 반영되었습니다.',
+      'success',
+    );
+  };
+
+  const handleWorkspaceBackupImported = () => {
+    const nextProfiles = storageRepository.getProfiles();
+    const nextActiveId = storageRepository.getActiveProfileId();
+    const fallbackProfile =
+      nextProfiles.find((p) => p.id === nextActiveId) ?? nextProfiles[0];
+    setProfiles(nextProfiles);
+    setActiveProfileId(nextActiveId);
+    setWorkspaceState(
+      storageRepository.getProfileState(nextActiveId) ??
+        buildFallbackWorkspaceState(fallbackProfile),
+    );
+    setHistory(storageRepository.getAuditHistory());
+    setCustomPacks(storageRepository.getCustomPolicyPacks());
+    setDisabledPackIds(storageRepository.getDisabledPackIds());
+    setLlmConfig(storageRepository.getLlmConfig());
+    setOverrideFacts(null);
+    setActiveScenarioId(null);
+    setIsDirty(false);
   };
 
   const handleDeleteHistoryRecord = (recordId: string) => {
@@ -1143,6 +1310,8 @@ export default function App() {
                   facts={effectiveFacts}
                   result={currentResult}
                   activePacks={activePacks}
+                  onApplyLegalDraft={handleApplyLegalDraft}
+                  onApplySecurityFixes={handleApplySecurityFixes}
                   onShowToast={showToast}
                 />
               </div>
@@ -1151,7 +1320,12 @@ export default function App() {
         )}
 
         {activeTab === 'cicd-gate' && (
-          <CicdGateTab activePacks={activePacks} onShowToast={showToast} />
+          <CicdGateTab
+            activePacks={activePacks}
+            workspaceFacts={effectiveFacts}
+            workspaceProfileName={activeProfile?.profile_name ?? '현재 워크스페이스'}
+            onShowToast={showToast}
+          />
         )}
 
         {activeTab === 'policy-packs' && (
@@ -1172,6 +1346,8 @@ export default function App() {
             history={history}
             onRestoreToStudio={handleRestoreHistoryRecord}
             onDeleteRecord={handleDeleteHistoryRecord}
+            onBackupImported={handleWorkspaceBackupImported}
+            onShowToast={showToast}
           />
         )}
 

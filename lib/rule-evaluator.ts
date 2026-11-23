@@ -71,6 +71,24 @@ export function normalizeVendor(vendor: DetectedVendor): DetectedVendor {
   };
 }
 
+export function computeEffectiveHasCrossBorder(
+  destinationCountries: string[],
+  activeVendors: DetectedVendor[],
+  businessCountry: string,
+  virtualTransfer: CanonicalFactModel['transfers']['virtual_transfer'],
+): boolean {
+  const normalizedBusiness = businessCountry.toUpperCase();
+  return (
+    destinationCountries.length > 0 ||
+    activeVendors.some(
+      (v) =>
+        (v.data_residency_country || v.country || v.default_country).toUpperCase() !==
+        normalizedBusiness,
+    ) ||
+    Boolean(virtualTransfer.foreign_iam_access || virtualTransfer.foreign_kms_control)
+  );
+}
+
 /**
  * Normalizes facts while automatically excluding vendors marked with `includes_pii === false`
  * from destination country extraction and violation matching to prevent false positives.
@@ -130,11 +148,12 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
     facts.transfers.virtual_transfer.foreign_iam_access ||
     facts.transfers.virtual_transfer.foreign_kms_control;
 
-  const effectiveHasCrossBorder =
-    effectiveDestinationCountries.length > 0 ||
-    (facts.transfers.has_cross_border &&
-      allVendors.length === 0 &&
-      effectiveDestinationCountries.length > 0);
+  const effectiveHasCrossBorder = computeEffectiveHasCrossBorder(
+    effectiveDestinationCountries,
+    activeVendors,
+    businessCountry,
+    facts.transfers.virtual_transfer,
+  );
 
   const activePurposes = Array.from(
     new Set(activeVendors.map((v) => v.transfer_purpose)),
@@ -193,6 +212,14 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
       ),
       has_ai_training_opt_out_notice:
         facts.legal_doc.has_ai_training_opt_out_notice ?? false,
+      has_ai_service_notice:
+        facts.legal_doc.has_ai_service_notice ??
+        facts.legal_doc.has_ai_training_opt_out_notice ??
+        false,
+      has_ai_output_label_notice:
+        facts.legal_doc.has_ai_output_label_notice ??
+        facts.legal_doc.has_ai_training_opt_out_notice ??
+        false,
       has_do_not_sell_or_share_notice:
         facts.legal_doc.has_do_not_sell_or_share_notice ?? false,
     },
@@ -691,7 +718,10 @@ function collectAppliedCountryRisks(
     context.transfers.virtual_transfer.foreign_iam_access ||
     context.transfers.virtual_transfer.foreign_kms_control
   ) {
-    if (destinations.size === 0) {
+    if (
+      destinations.size === 0 &&
+      context.workspace.business_country.toUpperCase() !== 'US'
+    ) {
       destinations.add('US');
     }
   }
@@ -710,7 +740,8 @@ function collectAppliedCountryRisks(
       profile,
       triggered_by_vendors: triggeredByVendors,
       triggered_by_virtual_transfer:
-        context.derived.has_any_virtual_transfer && countryCode === 'US',
+        context.derived.has_any_virtual_transfer &&
+        (countryCode === 'US' || triggeredByVendors.length === 0),
     });
   }
 

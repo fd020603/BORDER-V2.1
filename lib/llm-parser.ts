@@ -1,3 +1,4 @@
+import { computeEffectiveHasCrossBorder } from './rule-evaluator';
 import { SDK_REGISTRY } from './sdk-registry';
 import type {
   CanonicalFactModel,
@@ -122,11 +123,169 @@ function extractBalancedJson(text: string, startSearchFrom = 0): string | null {
   return null;
 }
 
+const LEGAL_DOC_BOOLEAN_FIELDS = [
+  'exists',
+  'claims_domestic_only',
+  'has_separate_consent',
+  'has_entrustment_disclosure',
+  'disclosed_method_and_time',
+  'disclosed_retention_period',
+  'disclosed_opt_out_method',
+  'disclosed_dest_country_law_info',
+  'has_scc_or_safeguard_notice',
+  'has_ai_training_opt_out_notice',
+  'has_ai_service_notice',
+  'has_ai_output_label_notice',
+  'has_do_not_sell_or_share_notice',
+] as const;
+
+const LEGAL_DOC_STRING_ARRAY_FIELDS = [
+  'disclosed_countries',
+  'disclosed_vendors',
+  'disclosed_items',
+] as const;
+
+const SECURITY_BOOLEAN_FIELDS = [
+  'encryption_in_transit',
+  'encryption_at_rest',
+  'pii_masked_before_transfer',
+] as const;
+
+const VIRTUAL_TRANSFER_BOOLEAN_FIELDS = [
+  'foreign_iam_access',
+  'foreign_kms_control',
+] as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+export function validateExtractedPayload(data: unknown): ExtractedLlmPayload {
+  if (!isPlainObject(data)) {
+    throw new Error('LLM response root must be a plain JSON object.');
+  }
+
+  const result: ExtractedLlmPayload = {};
+  let validSectionCount = 0;
+
+  if (data.legal_doc !== undefined) {
+    if (!isPlainObject(data.legal_doc)) {
+      throw new Error('Invalid "legal_doc": expected an object.');
+    }
+    const legalDoc: Partial<CanonicalFactModel['legal_doc']> = {};
+    let recognizedFields = 0;
+
+    for (const key of LEGAL_DOC_BOOLEAN_FIELDS) {
+      const val = data.legal_doc[key];
+      if (val !== undefined) {
+        if (typeof val !== 'boolean') {
+          throw new Error(`Invalid "legal_doc.${key}": expected boolean.`);
+        }
+        legalDoc[key] = val;
+        recognizedFields += 1;
+      }
+    }
+
+    for (const key of LEGAL_DOC_STRING_ARRAY_FIELDS) {
+      const val = data.legal_doc[key];
+      if (val !== undefined) {
+        if (!isStringArray(val)) {
+          throw new Error(`Invalid "legal_doc.${key}": expected string[].`);
+        }
+        legalDoc[key] = val;
+        recognizedFields += 1;
+      }
+    }
+
+    if (recognizedFields === 0) {
+      throw new Error('Invalid "legal_doc": contains no valid schema fields.');
+    }
+    result.legal_doc = legalDoc;
+    validSectionCount += 1;
+  }
+
+  if (data.security !== undefined) {
+    if (!isPlainObject(data.security)) {
+      throw new Error('Invalid "security": expected an object.');
+    }
+    const security: Partial<CanonicalFactModel['security']> = {};
+    let recognizedFields = 0;
+
+    for (const key of SECURITY_BOOLEAN_FIELDS) {
+      const val = data.security[key];
+      if (val !== undefined) {
+        if (typeof val !== 'boolean') {
+          throw new Error(`Invalid "security.${key}": expected boolean.`);
+        }
+        security[key] = val;
+        recognizedFields += 1;
+      }
+    }
+
+    if (recognizedFields === 0) {
+      throw new Error('Invalid "security": contains no valid schema fields.');
+    }
+    result.security = security;
+    validSectionCount += 1;
+  }
+
+  if (data.virtual_transfer !== undefined) {
+    if (!isPlainObject(data.virtual_transfer)) {
+      throw new Error('Invalid "virtual_transfer": expected an object.');
+    }
+    const virtualTransfer: Partial<VirtualTransferFacts> = {};
+    let recognizedFields = 0;
+
+    for (const key of VIRTUAL_TRANSFER_BOOLEAN_FIELDS) {
+      const val = data.virtual_transfer[key];
+      if (val !== undefined) {
+        if (typeof val !== 'boolean') {
+          throw new Error(`Invalid "virtual_transfer.${key}": expected boolean.`);
+        }
+        virtualTransfer[key] = val;
+        recognizedFields += 1;
+      }
+    }
+
+    if (recognizedFields === 0) {
+      throw new Error('Invalid "virtual_transfer": contains no valid schema fields.');
+    }
+    result.virtual_transfer = virtualTransfer;
+    validSectionCount += 1;
+  }
+
+  if (data.infra_countries !== undefined) {
+    if (!isStringArray(data.infra_countries)) {
+      throw new Error('Invalid "infra_countries": expected string[].');
+    }
+    result.infra_countries = data.infra_countries;
+    validSectionCount += 1;
+  }
+
+  if (validSectionCount === 0) {
+    throw new Error(
+      'Response JSON is missing required compliance sections (legal_doc, security, virtual_transfer, infra_countries).',
+    );
+  }
+
+  return result;
+}
+
 function parseJsonWithRepair(raw: string): ExtractedLlmPayload {
   const cleaned = stripMarkdownAndThink(raw);
+  let lastValidationError: Error | null = null;
+
   try {
-    return JSON.parse(cleaned) as ExtractedLlmPayload;
-  } catch {
+    return validateExtractedPayload(JSON.parse(cleaned));
+  } catch (err) {
+    if (err instanceof Error && !err.message.includes('JSON')) {
+      lastValidationError = err;
+    }
+
     const legalDocIdx = cleaned.search(/"legal_doc"\s*:/);
     if (legalDocIdx !== -1) {
       const braceBefore = cleaned.lastIndexOf('{', legalDocIdx);
@@ -134,9 +293,11 @@ function parseJsonWithRepair(raw: string): ExtractedLlmPayload {
         const balanced = extractBalancedJson(cleaned, braceBefore);
         if (balanced) {
           try {
-            return JSON.parse(balanced) as ExtractedLlmPayload;
-          } catch {
-            // continue to generic scan
+            return validateExtractedPayload(JSON.parse(balanced));
+          } catch (innerErr) {
+            if (innerErr instanceof Error) {
+              lastValidationError = innerErr;
+            }
           }
         }
       }
@@ -147,12 +308,19 @@ function parseJsonWithRepair(raw: string): ExtractedLlmPayload {
       const candidate = extractBalancedJson(cleaned, searchIdx);
       if (!candidate) break;
       try {
-        return JSON.parse(candidate) as ExtractedLlmPayload;
-      } catch {
+        return validateExtractedPayload(JSON.parse(candidate));
+      } catch (innerErr) {
+        if (innerErr instanceof Error) {
+          lastValidationError = innerErr;
+        }
         searchIdx = cleaned.indexOf('{', searchIdx + candidate.length);
       }
     }
-    throw new Error('Response does not contain a valid JSON object.');
+
+    throw (
+      lastValidationError ??
+      new Error('Response does not contain a valid schema-compliant JSON object.')
+    );
   }
 }
 
@@ -257,6 +425,18 @@ export function extractHeuristicPayload(
       text,
     );
 
+  const hasAiServiceNotice =
+    exists &&
+    /(생성형\s*인공지능|생성형\s*AI|인공지능\s*(기반|시스템)\s*(운용|제공|활용)|AI\s*(기반|시스템|기능)\s*(운용|제공|사전\s*고지)|powered\s+by\s+(generative\s+)?AI|generative\s+AI\s+(notice|disclosure))/i.test(
+      text,
+    );
+
+  const hasAiOutputLabelNotice =
+    exists &&
+    /(AI\s*(생성|기반)\s*(결과물|콘텐츠)\s*(표시|배지|라벨)|워터마크|C2PA|watermark|AI-?generated\s+(content|output)\s+(label|notice|disclosure))/i.test(
+      text,
+    );
+
   const hasDoNotSellOrShareNotice =
     exists &&
     /(Do\s+Not\s+Sell\s+or\s+Share|판매\s*(또는|및)?\s*공유\s*거부|\bGPC\b|Global\s+Privacy\s+Control)/i.test(
@@ -310,6 +490,8 @@ export function extractHeuristicPayload(
       disclosed_dest_country_law_info: disclosedDestCountryLawInfo,
       has_scc_or_safeguard_notice: hasSccOrSafeguardNotice,
       has_ai_training_opt_out_notice: hasAiTrainingOptOutNotice,
+      has_ai_service_notice: hasAiServiceNotice,
+      has_ai_output_label_notice: hasAiOutputLabelNotice,
       has_do_not_sell_or_share_notice: hasDoNotSellOrShareNotice,
     },
     security: {
@@ -398,6 +580,14 @@ function mergeParsedFacts(
       llmPayload?.legal_doc?.has_ai_training_opt_out_notice ??
       heuristic.legal_doc?.has_ai_training_opt_out_notice ??
       false,
+    has_ai_service_notice:
+      llmPayload?.legal_doc?.has_ai_service_notice ??
+      heuristic.legal_doc?.has_ai_service_notice ??
+      false,
+    has_ai_output_label_notice:
+      llmPayload?.legal_doc?.has_ai_output_label_notice ??
+      heuristic.legal_doc?.has_ai_output_label_notice ??
+      false,
     has_do_not_sell_or_share_notice:
       llmPayload?.legal_doc?.has_do_not_sell_or_share_notice ??
       heuristic.legal_doc?.has_do_not_sell_or_share_notice ??
@@ -418,6 +608,8 @@ function mergeParsedFacts(
     legalDoc.disclosed_dest_country_law_info = false;
     legalDoc.has_scc_or_safeguard_notice = false;
     legalDoc.has_ai_training_opt_out_notice = false;
+    legalDoc.has_ai_service_notice = false;
+    legalDoc.has_ai_output_label_notice = false;
     legalDoc.has_do_not_sell_or_share_notice = false;
   }
 
@@ -486,11 +678,12 @@ function mergeParsedFacts(
   );
 
   const destinationCountries = Array.from(destinationSet);
-  const hasCrossBorder =
-    destinationCountries.length > 0 ||
-    activeVendors.some(
-      (v) => v.data_residency_country.toUpperCase() !== businessCountry,
-    );
+  const hasCrossBorder = computeEffectiveHasCrossBorder(
+    destinationCountries,
+    activeVendors,
+    businessCountry,
+    virtualTransfer,
+  );
 
   return {
     workspace: {
@@ -532,11 +725,18 @@ export function normalizeLocalEndpoints(rawUrl: string): {
 
   let isLoopback = false;
   try {
-    const hostname = new URL(chatUrl).hostname.toLowerCase();
+    const parsedChat = new URL(chatUrl);
+    if (parsedChat.hostname === '0.0.0.0') {
+      parsedChat.hostname = '127.0.0.1';
+      chatUrl = parsedChat.toString();
+      const parsedModels = new URL(modelsUrl);
+      parsedModels.hostname = '127.0.0.1';
+      modelsUrl = parsedModels.toString();
+    }
+    const hostname = parsedChat.hostname.toLowerCase();
     isLoopback =
       hostname === 'localhost' ||
       hostname === '127.0.0.1' ||
-      hostname === '0.0.0.0' ||
       hostname === '::1' ||
       hostname === '[::1]';
   } catch {
@@ -584,6 +784,8 @@ const LOCAL_FACT_JSON_SCHEMA = {
         disclosed_dest_country_law_info: { type: 'boolean' },
         has_scc_or_safeguard_notice: { type: 'boolean' },
         has_ai_training_opt_out_notice: { type: 'boolean' },
+        has_ai_service_notice: { type: 'boolean' },
+        has_ai_output_label_notice: { type: 'boolean' },
         has_do_not_sell_or_share_notice: { type: 'boolean' },
       },
     },
@@ -637,7 +839,7 @@ async function callLocalOpenAiWithRetry(
   const baseInstruction = `Extract structured privacy compliance facts from the privacy policy text and infrastructure code below.
 Do NOT output reasoning, thinking steps, commentary, or markdown fences. Return ONLY a compact valid JSON object with keys:
 {
-  "legal_doc": { "exists": boolean, "claims_domestic_only": boolean, "has_separate_consent": boolean, "has_entrustment_disclosure": boolean, "disclosed_countries": string[], "disclosed_vendors": string[], "disclosed_items": string[], "disclosed_method_and_time": boolean, "disclosed_retention_period": boolean, "disclosed_opt_out_method": boolean, "disclosed_dest_country_law_info": boolean, "has_scc_or_safeguard_notice": boolean, "has_ai_training_opt_out_notice": boolean, "has_do_not_sell_or_share_notice": boolean },
+  "legal_doc": { "exists": boolean, "claims_domestic_only": boolean, "has_separate_consent": boolean, "has_entrustment_disclosure": boolean, "disclosed_countries": string[], "disclosed_vendors": string[], "disclosed_items": string[], "disclosed_method_and_time": boolean, "disclosed_retention_period": boolean, "disclosed_opt_out_method": boolean, "disclosed_dest_country_law_info": boolean, "has_scc_or_safeguard_notice": boolean, "has_ai_training_opt_out_notice": boolean, "has_ai_service_notice": boolean, "has_ai_output_label_notice": boolean, "has_do_not_sell_or_share_notice": boolean },
   "security": { "encryption_in_transit": boolean, "encryption_at_rest": boolean, "pii_masked_before_transfer": boolean },
   "virtual_transfer": { "foreign_iam_access": boolean, "foreign_kms_control": boolean },
   "infra_countries": string[]
@@ -776,7 +978,7 @@ Do NOT output reasoning, thinking steps, commentary, or markdown fences. Return 
         }
         messages.push({
           role: 'user',
-          content: `Your previous response could not be parsed as JSON (${msg}). Output ONLY one raw JSON object starting with { and ending with }, with no thinking or prose.`,
+          content: `Your previous response could not be parsed or failed schema validation (${msg}). Output ONLY one raw JSON object with valid keys ("legal_doc", "security", "virtual_transfer", "infra_countries") using boolean and string[] values, starting with { and ending with }, with no thinking or prose.`,
         });
       }
     } catch (err) {
@@ -841,12 +1043,13 @@ export async function parseInputsToFacts(
       });
 
       if (response.ok) {
-        const json = (await response.json()) as { parsed?: ExtractedLlmPayload };
-        if (json.parsed) {
+        const json = (await response.json()) as { parsed?: unknown };
+        if (json.parsed !== undefined) {
+          const validatedPayload = validateExtractedPayload(json.parsed);
           return {
             parsedFacts: mergeParsedFacts(
               heuristic,
-              json.parsed,
+              validatedPayload,
               detectedVendors,
               options,
             ),

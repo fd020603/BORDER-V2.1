@@ -57,6 +57,8 @@ export const CANONICAL_FACT_KEYS = [
   'legal_doc.disclosed_dest_country_law_info',
   'legal_doc.has_scc_or_safeguard_notice',
   'legal_doc.has_ai_training_opt_out_notice',
+  'legal_doc.has_ai_service_notice',
+  'legal_doc.has_ai_output_label_notice',
   'legal_doc.has_do_not_sell_or_share_notice',
   'derived.active_vendor_names',
   'derived.active_vendor_sdks',
@@ -156,6 +158,8 @@ export interface CanonicalFactModel {
     disclosed_dest_country_law_info: boolean;
     has_scc_or_safeguard_notice: boolean;
     has_ai_training_opt_out_notice: boolean;
+    has_ai_service_notice?: boolean;
+    has_ai_output_label_notice?: boolean;
     has_do_not_sell_or_share_notice: boolean;
   };
 }
@@ -364,13 +368,18 @@ export interface AuditHistoryRecord {
   evaluated_at: string;
   facts_snapshot: CanonicalFactModel;
   result_snapshot: EvaluationResult;
+  input_snapshot?: {
+    policyText: string;
+    noPolicyDoc: boolean;
+    infraCode: string;
+    selectedRegions: string[];
+  };
 }
 
 export type LlmProvider = 'GEMINI_CLOUD' | 'LOCAL_OPENAI_COMPAT';
 
 export interface LlmConfig {
   provider: LlmProvider;
-  apiKey?: string;
   localEndpoint?: string;
   modelName: string;
 }

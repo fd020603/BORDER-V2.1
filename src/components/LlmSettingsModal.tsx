@@ -54,6 +54,17 @@ export function LlmSettingsModal({
       });
   }, [open, config]);
 
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose]);
+
   if (!open) return null;
 
   const { isLoopback } = normalizeLocalEndpoints(localEndpoint);
@@ -163,12 +174,25 @@ export function LlmSettingsModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75">
-      <div className="w-full max-w-lg rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="llm-settings-modal-title"
+        className="w-full max-w-lg rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl overflow-hidden"
+      >
         <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Cpu className="w-4 h-4 text-sky-400" />
-            <h2 className="font-display text-sm font-semibold text-slate-100">
+            <h2
+              id="llm-settings-modal-title"
+              className="font-display text-sm font-semibold text-slate-100"
+            >
               하이브리드 AI 파서 엔진 설정
             </h2>
           </div>
