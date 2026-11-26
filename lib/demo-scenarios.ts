@@ -1,13 +1,24 @@
-import type { CanonicalFactModel, WorkspaceProfile } from './types';
+import type {
+  CanonicalFactModel,
+  LegalDocManualOverrides,
+  WorkspaceProfile,
+} from './types';
 
 export interface DemoScenario {
   id: string;
   short_label: string;
+  persona: string;
   title: string;
   subtitle: string;
-  expected_verdict_hint: string;
+  story: string;
+  highlights: string[];
+  expected_verdict_hint: 'APPROVED' | 'DRIFT_DETECTED' | 'DENIED' | 'CUSTOM';
+  selected_regions: string[];
+  has_separate_consent_ui?: boolean;
+  manual_legal_doc_overrides?: LegalDocManualOverrides;
   sample_package_json: string;
   sample_privacy_policy: string;
+  sample_infra_code?: string;
   facts: CanonicalFactModel;
 }
 
@@ -44,11 +55,17 @@ export const DEFAULT_WORKSPACE_PROFILES: WorkspaceProfile[] = [
 export const DEMO_SCENARIOS: DemoScenario[] = [
   {
     id: 'case-1-approved',
-    short_label: 'Case 1 · 정상 승인',
-    title: '정상 승인 — 처리위탁 특례(제28조의8 제1항 제3호) 준수',
+    short_label: 'Case 1 · 정상 승인 (국내 AI SaaS)',
+    persona: '서울 B2B AI 스타트업 · 독스브릿지 (DocsBridge)',
+    title: '정상 승인 — 처리위탁 특례(제28조의8 제1항 제3호) 완벽 준수',
     subtitle:
       '국내 AI SaaS + 서울 리전 + OpenAI 연동이지만 처리방침 5대 고지와 AI 학습 제외(ZDR) 안내가 완비되어 별도 동의 없이도 통과합니다.',
+    story:
+      'AWS 서울 리전에서 기업용 문서 요약 AI를 운영하는 모범 사례입니다. OpenAI(US)에는 가명·마스킹된 프롬프트만 위탁 전송하고, 결제(Toss)는 국내 처리로 비-PII 제외했습니다. 처리방침에 5대 필수 고지·ZDR·AI 생성 표시를 모두 담아 100% 승인됩니다.',
+    highlights: ['처리위탁 특례(제3호)', 'PII 마스킹 + ZDR', '비-PII 벤더 제외'],
     expected_verdict_hint: 'APPROVED',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: false,
     sample_package_json: JSON.stringify(
       {
         name: 'seoul-ai-workspace',
@@ -63,6 +80,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     ),
     sample_privacy_policy:
       '당사는 생성형 인공지능(AI) 기반 문서 요약 기능을 운용하며 AI 생성 결과물 표시(배지·안내)를 제공합니다. 계약 이행을 위한 개인정보 처리위탁 및 보관(개인정보 보호법 제28조의8 제1항 제3호)을 위해 OpenAI LLC(미국)에 가명·마스킹 처리된 프롬프트 데이터를 실시간 암호화 전송합니다. 보유기간은 위탁 계약 종료 시까지이며, 거부 시 AI 요약 기능 이용이 제한될 수 있습니다. 미국 FISA/CLOUD Act 리스크 완화를 위해 Zero Data Retention(AI 학습 제외) 계약 및 DPF 안전장치를 적용합니다.',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-2"\n}',
     facts: {
       workspace: {
         business_country: 'KR',
@@ -72,6 +90,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       transfers: {
         has_cross_border: true,
         destination_countries: ['US'],
+        infra_countries: [],
         detected_vendors: [
           {
             name: 'OpenAI LLC',
@@ -133,11 +152,17 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
   },
   {
     id: 'case-2-drift',
-    short_label: 'Case 2 · 위조 여권(Drift)',
-    title: '위조 여권 탐지 — Policy-Infra Drift & Layer 3·4 동시 적발',
+    short_label: 'Case 2 · 위조 여권 (국내 보관 모순)',
+    persona: '글로벌 커머스 MVP · 샵펄스 (ShopPulse)',
+    title: '위조 여권 탐지 — Policy-Infra Drift & 미고지 해외 SDK 동시 적발',
     subtitle:
       '처리방침에는 "국내 단독 보관"을 선언했으나, package.json에 openai·stripe·mixpanel이 포함되고 AWS 도쿄 리전(JP)으로 데이터를 전송 중입니다.',
+    story:
+      '초기 쇼핑몰 약관을 그대로 복사해 "국내 서버에만 단독 보관하며 국외 이전 없음"이라고 게시했지만, 실제로는 OpenAI·Stripe·Mixpanel(미국)과 AWS 도쿄(일본)를 사용 중인 전형적인 문서-인프라 불일치(Drift) 사례입니다.',
+    highlights: ['국내 보관 허위 선언 Drift', '미고지 해외 SDK 3종', '미국 CCPA 거부권 누락'],
     expected_verdict_hint: 'DRIFT_DETECTED',
+    selected_regions: ['aws-seoul', 'aws-tokyo'],
+    has_separate_consent_ui: false,
     sample_package_json: JSON.stringify(
       {
         name: 'global-commerce-mvp',
@@ -153,6 +178,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     ),
     sample_privacy_policy:
       '회사는 이용자의 모든 개인정보를 대한민국 국내 서버에 단독으로 보관하며, 어떠한 경우에도 제3자에게 제공하거나 국외로 이전하지 않습니다.',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-1"\n}',
     facts: {
       workspace: {
         business_country: 'KR',
@@ -162,6 +188,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       transfers: {
         has_cross_border: true,
         destination_countries: ['US', 'JP'],
+        infra_countries: ['JP'],
         detected_vendors: [
           {
             name: 'OpenAI LLC',
@@ -238,11 +265,17 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
   },
   {
     id: 'case-3-denied',
-    short_label: 'Case 3 · 다중 규제 충돌',
-    title: '가상 국외 이전 & 다중 규제 충돌 (PIPA · GDPR · FISA · AI Act)',
+    short_label: 'Case 3 · 다중 충돌 (의료 AI·원격열람)',
+    persona: '한·EU AI 헬스케어 파일럿 · 메드아이 (MedAI)',
+    title: '가상 국외 이전 & 4계층 다중 규제 충돌 (PIPA · GDPR · FISA · AI Act)',
     subtitle:
-      'AI 헬스케어 서비스 — DB는 서울 리전이지만 미국 본사 IAM 열람 권한과 해외 KMS 통제, EU 사용자 포함, 암호화 미적용이 동시 탐지되었습니다.',
+      'DB는 서울 리전이지만 미국 본사 IAM 열람 권한과 해외 KMS 통제, EU 환자 민감정보, 암호화 미적용이 동시 탐지되었습니다.',
+    story:
+      '환자 증상 DB는 서울 리전에 두었으나 미국 본사 엔지니어의 원격 IAM 열람과 미국 KMS 키 관리(가상 국외 이전)가 열려 있습니다. 암호화 미적용, EU 민감 의료정보, DPF 미인증 AI 벤더가 겹쳐 모든 계층에서 차단됩니다.',
+    highlights: ['가상 국외 이전(IAM·KMS)', 'EU 민감정보 · DPF 미인증', '전송·저장 암호화 미적용'],
     expected_verdict_hint: 'DENIED',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: false,
     sample_package_json: JSON.stringify(
       {
         name: 'medai-diagnostics-api',
@@ -257,6 +290,15 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     ),
     sample_privacy_policy:
       '당사는 서비스 제공을 위해 필요한 최소한의 개인정보를 수집합니다. 해외 클라우드 인프라 및 파트너를 활용할 수 있습니다.',
+    sample_infra_code: [
+      'provider "aws" {',
+      '  region = "ap-northeast-2"',
+      '}',
+      'resource "aws_iam_role_policy" "us_hq_access" {',
+      '  foreign_iam_access = true',
+      '  kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/hq-key"',
+      '}',
+    ].join('\n'),
     facts: {
       workspace: {
         business_country: 'KR',
@@ -266,6 +308,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       transfers: {
         has_cross_border: true,
         destination_countries: ['US'],
+        infra_countries: [],
         detected_vendors: [
           {
             name: 'Anthropic PBC',
@@ -327,12 +370,393 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
     },
   },
   {
-    id: 'case-4-custom',
-    short_label: 'Case 4 · 빈 템플릿',
-    title: '커스텀 빈 템플릿 — 초기 진단 대기 상태',
+    id: 'case-4-global-consent-approved',
+    short_label: 'Case 4 · 글로벌 승인 (별도 동의 UI)',
+    persona: '한·EU·미국 구독 SaaS · 플로우킷 (FlowKit)',
+    title: '글로벌 3개국 동시 승인 — 별도 동의 체크박스 UI + SCC·CCPA 완비',
     subtitle:
-      '사용자가 직접 의존성 파일과 처리방침 텍스트를 입력해 검증할 수 있도록 초기화된 기본 CanonicalFactModel 상태입니다.',
+      '한국·유럽·미국 이용자에게 Stripe·Mixpanel(미국)을 연동하지만 Step 3 별도 동의 체크박스 UI(O)와 SCC/DPF·판매 거부권을 모두 충족합니다.',
+    story:
+      '글로벌 구독 서비스가 결제(Stripe)와 행동 분석(Mixpanel)을 미국으로 연동하면서도, 회원가입 화면에 국외이전 별도 동의 체크박스(Step 3 Q4 = O)를 구현하고 처리방침에 EU SCC/DPF·미국 CCPA Do Not Sell·보유기간·거부권을 완비해 3개국 법률을 모두 통과한 사례입니다.',
+    highlights: ['Step 3 별도 동의 UI (O)', 'KR·EU·US 3개국 승인', 'CCPA Do Not Sell 충족'],
+    expected_verdict_hint: 'APPROVED',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: true,
+    sample_package_json: JSON.stringify(
+      {
+        name: 'flowkit-global-saas',
+        dependencies: {
+          next: '^15.0.0',
+          stripe: '^17.0.0',
+          mixpanel: '^2.55.0',
+        },
+      },
+      null,
+      2,
+    ),
+    sample_privacy_policy:
+      '당사는 글로벌 구독 결제 및 서비스 품질 분석을 위해 이용자의 이메일, 결제 식별자, 서비스 이용 로그를 국외 처리위탁 및 제3자 분석 목적으로 미국(US) 소재 Stripe, Inc. 및 Mixpanel, Inc.에 실시간 HTTPS 암호화 네트워크로 전송합니다. 회원가입 및 결제 시 일반 약관과 분리된 국외 이전 별도 동의 체크박스를 제공하며, 보유·이용 기간은 회원 탈퇴 또는 계약 종료 시까지입니다. 이용자는 설정 메뉴에서 국외 이전 및 개인정보 판매·공유 거부(Do Not Sell or Share My Personal Information / GPC 신호 지원)를 언제든 행사할 수 있으며, 거부 시 일부 맞춤형 분석 기능이 제한될 수 있습니다. 미국 FISA 702 및 CLOUD Act 등 현지 법제 위험 완화를 위해 EU-US DPF 인증 및 EU 표준계약조항(SCC) 보호조치를 적용합니다.',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-2"\n}',
+    facts: {
+      workspace: {
+        business_country: 'KR',
+        data_subject_countries: ['KR', 'EU', 'US'],
+        industry_domain: 'GENERAL',
+      },
+      transfers: {
+        has_cross_border: true,
+        destination_countries: ['US'],
+        infra_countries: [],
+        detected_vendors: [
+          {
+            name: 'Stripe, Inc.',
+            sdk: 'stripe',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: false,
+            zero_data_retention: false,
+            pii_items: ['email', 'billing_address'],
+            category: 'PAYMENT',
+          },
+          {
+            name: 'Mixpanel, Inc.',
+            sdk: 'mixpanel',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ANALYTICS',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: false,
+            zero_data_retention: false,
+            pii_items: ['user_id', 'behavior_events'],
+            category: 'ANALYTICS',
+          },
+        ],
+        virtual_transfer: {
+          foreign_iam_access: false,
+          foreign_kms_control: false,
+        },
+      },
+      security: {
+        encryption_in_transit: true,
+        encryption_at_rest: true,
+        pii_masked_before_transfer: false,
+      },
+      legal_doc: {
+        exists: true,
+        claims_domestic_only: false,
+        has_separate_consent: true,
+        has_entrustment_disclosure: true,
+        disclosed_countries: ['US'],
+        disclosed_vendors: ['Stripe, Inc.', 'Mixpanel, Inc.'],
+        disclosed_items: ['email', 'billing_address', 'user_id', 'behavior_events'],
+        disclosed_method_and_time: true,
+        disclosed_retention_period: true,
+        disclosed_opt_out_method: true,
+        disclosed_dest_country_law_info: true,
+        has_scc_or_safeguard_notice: true,
+        has_ai_training_opt_out_notice: false,
+        has_ai_service_notice: false,
+        has_ai_output_label_notice: false,
+        has_do_not_sell_or_share_notice: true,
+      },
+    },
+  },
+  {
+    id: 'case-5-jp-kr-infra-drift',
+    short_label: 'Case 5 · 한·일 리전 누락 (인프라 Drift)',
+    persona: '도쿄 본사 AI 스타트업 · 도쿄노트 (TokyoNote)',
+    title: '숨은 인프라 리전 누락 — 일본 본사가 AWS 서울(KR) 고지를 빠뜨린 Drift',
+    subtitle:
+      '처리방침에 미국(OpenAI)만 고지하고 실제 앱 서버가 올라간 AWS 서울 리전(KR) 고지를 누락해 JP_APPI와 KR_PIPA가 동시 적발합니다.',
+    story:
+      '도쿄 본사(JP)가 한국·영국 고객에게 AI 노트 앱을 제공하면서 처리방침에 미국 OpenAI 위탁은 꼼꼼히 적었지만, 정작 서비스 DB가 호스팅된 AWS 서울 리전(KR)을 이전 국가 목록에서 빠뜨린 사례입니다. 토폴로지 맵에서 JP → KR 경로가 위반 차단으로 표시됩니다.',
+    highlights: ['AWS 서울(KR) 리전 미고지', 'JP_APPI + KR_PIPA 동시 적발', '토폴로지 JP→KR 차단'],
+    expected_verdict_hint: 'DRIFT_DETECTED',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: false,
+    sample_package_json: JSON.stringify(
+      {
+        name: 'tokyonote-ai-service',
+        dependencies: {
+          next: '^15.0.0',
+          openai: '^4.70.0',
+        },
+      },
+      null,
+      2,
+    ),
+    sample_privacy_policy:
+      '당사는 생성형 인공지능(AI) 기반 노트 정리 기능을 제공하며 AI 생성 결과물 표시를 안내합니다. 계약 이행을 위한 개인정보 처리위탁 및 보관을 위해 미국(US) 소재 OpenAI LLC에 가명·마스킹 처리된 프롬프트를 실시간 암호화 전송합니다. 보유기간은 위탁 계약 종료 시까지이며 거부 시 AI 기능 이용이 제한됩니다. 미국 FISA/CLOUD Act 대응을 위해 Zero Data Retention(AI 학습 제외) 및 DPF·상당조치 보호체제를 적용합니다.',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-2"\n}',
+    facts: {
+      workspace: {
+        business_country: 'JP',
+        data_subject_countries: ['KR', 'GB'],
+        industry_domain: 'AI_SAAS',
+      },
+      transfers: {
+        has_cross_border: true,
+        destination_countries: ['KR', 'US'],
+        infra_countries: ['KR'],
+        detected_vendors: [
+          {
+            name: 'OpenAI LLC',
+            sdk: 'openai',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: true,
+            zero_data_retention: true,
+            pii_items: ['masked_prompt_text'],
+            category: 'AI',
+          },
+        ],
+        virtual_transfer: {
+          foreign_iam_access: false,
+          foreign_kms_control: false,
+        },
+      },
+      security: {
+        encryption_in_transit: true,
+        encryption_at_rest: true,
+        pii_masked_before_transfer: true,
+      },
+      legal_doc: {
+        exists: true,
+        claims_domestic_only: false,
+        has_separate_consent: false,
+        has_entrustment_disclosure: true,
+        disclosed_countries: ['US'],
+        disclosed_vendors: ['OpenAI LLC'],
+        disclosed_items: ['masked_prompt_text', 'account_identifier'],
+        disclosed_method_and_time: true,
+        disclosed_retention_period: true,
+        disclosed_opt_out_method: true,
+        disclosed_dest_country_law_info: true,
+        has_scc_or_safeguard_notice: true,
+        has_ai_training_opt_out_notice: true,
+        has_ai_service_notice: true,
+        has_ai_output_label_notice: true,
+        has_do_not_sell_or_share_notice: true,
+      },
+    },
+  },
+  {
+    id: 'case-6-cn-pipl-blocked',
+    short_label: 'Case 6 · 중국 PIPL 차단 (핀테크·수동보정)',
+    persona: '한·중 크로스보더 핀테크 · 브릿지페이 (BridgePay)',
+    title: '중국 PIPL 국외이전 차단 — 별도 동의·CAC 표준계약(SCC) 누락',
+    subtitle:
+      '한국·중국 고객에게 해외 결제(Stripe)·영수증 메일(Resend)을 제공하지만 중국 PIPL 필수 요건인 별도 동의 UI와 CAC SCC 고지가 빠져 차단됩니다.',
+    story:
+      '한국과 중국 이용자에게 해외 송금·결제 영수증 발송을 제공하는 핀테크 앱입니다. 기본 위탁 고지는 적혀 있으나 중국 PIPL 제28·38·39조가 요구하는 금융 민감정보·국외이전 별도 동의 체크박스와 CAC 표준계약(SCC)이 누락되었습니다. Step 3 Q4나 Step 4 수동 보정 토글을 켜서 실시간 점수 변화를 확인해 보세요.',
+    highlights: ['CN_PIPL 별도 동의·SCC 차단', 'KR·CN 핀테크 다중 규제', 'Step 4 수동 보정 체험용'],
     expected_verdict_hint: 'DENIED',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: false,
+    sample_package_json: JSON.stringify(
+      {
+        name: 'bridgepay-fintech-app',
+        dependencies: {
+          stripe: '^17.0.0',
+          resend: '^4.0.0',
+        },
+      },
+      null,
+      2,
+    ),
+    sample_privacy_policy:
+      '당사는 해외 결제 처리 및 결제 영수증 이메일 발송 위탁을 위해 미국(US) 소재 Stripe, Inc. 및 Resend Inc.에 이메일, 결제 토큰, 영수증 내역을 실시간 암호화 전송합니다. 보유기간은 거래 종료 후 5년이며, 거부 시 해외 결제 및 영수증 알림 서비스 이용이 제한될 수 있습니다.',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-2"\n}',
+    facts: {
+      workspace: {
+        business_country: 'KR',
+        data_subject_countries: ['KR', 'CN'],
+        industry_domain: 'FINTECH',
+      },
+      transfers: {
+        has_cross_border: true,
+        destination_countries: ['US'],
+        infra_countries: [],
+        detected_vendors: [
+          {
+            name: 'Stripe, Inc.',
+            sdk: 'stripe',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: false,
+            zero_data_retention: false,
+            pii_items: ['email', 'payment_token'],
+            category: 'PAYMENT',
+          },
+          {
+            name: 'Resend Inc.',
+            sdk: 'resend',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: false,
+            zero_data_retention: false,
+            pii_items: ['email', 'receipt_summary'],
+            category: 'MESSAGING',
+          },
+        ],
+        virtual_transfer: {
+          foreign_iam_access: false,
+          foreign_kms_control: false,
+        },
+      },
+      security: {
+        encryption_in_transit: true,
+        encryption_at_rest: true,
+        pii_masked_before_transfer: false,
+      },
+      legal_doc: {
+        exists: true,
+        claims_domestic_only: false,
+        has_separate_consent: false,
+        has_entrustment_disclosure: true,
+        disclosed_countries: ['US'],
+        disclosed_vendors: ['Stripe, Inc.', 'Resend Inc.'],
+        disclosed_items: ['email', 'payment_token', 'receipt_summary'],
+        disclosed_method_and_time: true,
+        disclosed_retention_period: true,
+        disclosed_opt_out_method: true,
+        disclosed_dest_country_law_info: false,
+        has_scc_or_safeguard_notice: false,
+        has_ai_training_opt_out_notice: false,
+        has_ai_service_notice: false,
+        has_ai_output_label_notice: false,
+        has_do_not_sell_or_share_notice: false,
+      },
+    },
+  },
+  {
+    id: 'case-7-no-policy-mvp',
+    short_label: 'Case 7 · 처리방침 미작성 (초기 MVP)',
+    persona: '출시 직전 1인 개발자 · 런치패드 AI (LaunchPad AI)',
+    title: '처리방침 미보유 MVP — 자동 초안 생성 및 원클릭 치유 체험',
+    subtitle:
+      'Vercel US · Supabase · OpenAI로 빠르게 배포했지만 개인정보 처리방침이 전혀 없는 상태입니다. Step 4 미보유 안내와 자동 치유 초안을 체험하세요.',
+    story:
+      '해커톤·초기 출시를 앞두고 Vercel US, Supabase(US), OpenAI API를 붙여 서비스를 완성했지만 아직 웹사이트에 처리방침을 올리지 않은 상태입니다. Step 4의 처리방침 미보유 분기와 하단 자동 치유(Auto-Remediation)의 원클릭 처리방침 반영을 바로 시연할 수 있습니다.',
+    highlights: ['처리방침 미보유(noPolicyDoc)', 'Step 4 미보유 안내 분기', '원클릭 초안 자동 생성'],
+    expected_verdict_hint: 'DENIED',
+    selected_regions: ['vercel-us', 'supabase-us'],
+    has_separate_consent_ui: false,
+    sample_package_json: JSON.stringify(
+      {
+        name: 'launchpad-ai-mvp',
+        dependencies: {
+          next: '^15.0.0',
+          openai: '^4.70.0',
+          '@supabase/supabase-js': '^2.46.0',
+        },
+      },
+      null,
+      2,
+    ),
+    sample_privacy_policy: '',
+    sample_infra_code: 'provider "aws" {\n  region = "us-east-1"\n}',
+    facts: {
+      workspace: {
+        business_country: 'KR',
+        data_subject_countries: ['KR'],
+        industry_domain: 'AI_SAAS',
+      },
+      transfers: {
+        has_cross_border: true,
+        destination_countries: ['US'],
+        infra_countries: ['US'],
+        detected_vendors: [
+          {
+            name: 'OpenAI LLC',
+            sdk: 'openai',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: true,
+            zero_data_retention: false,
+            pii_items: ['email', 'prompt_text'],
+            category: 'AI',
+          },
+          {
+            name: 'Supabase, Inc.',
+            sdk: '@supabase/supabase-js',
+            country: 'US',
+            default_country: 'US',
+            data_residency_country: 'US',
+            transfer_purpose: 'ENTRUSTMENT',
+            includes_pii: true,
+            dpf_certified: true,
+            baa_supported: true,
+            zero_data_retention: false,
+            pii_items: ['email', 'user_profile'],
+            category: 'CLOUD_DB',
+          },
+        ],
+        virtual_transfer: {
+          foreign_iam_access: false,
+          foreign_kms_control: false,
+        },
+      },
+      security: {
+        encryption_in_transit: true,
+        encryption_at_rest: true,
+        pii_masked_before_transfer: false,
+      },
+      legal_doc: {
+        exists: false,
+        claims_domestic_only: false,
+        has_separate_consent: false,
+        has_entrustment_disclosure: false,
+        disclosed_countries: [],
+        disclosed_vendors: [],
+        disclosed_items: [],
+        disclosed_method_and_time: false,
+        disclosed_retention_period: false,
+        disclosed_opt_out_method: false,
+        disclosed_dest_country_law_info: false,
+        has_scc_or_safeguard_notice: false,
+        has_ai_training_opt_out_notice: false,
+        has_ai_service_notice: false,
+        has_ai_output_label_notice: false,
+        has_do_not_sell_or_share_notice: false,
+      },
+    },
+  },
+  {
+    id: 'case-8-custom',
+    short_label: 'Case 8 · 빈 템플릿 (직접 입력 시작)',
+    persona: '사용자 직접 구성 · 초기 빈 워크스페이스',
+    title: '커스텀 빈 템플릿 — 내 서비스 스택과 처리방침 직접 진단',
+    subtitle:
+      '외부 서비스와 처리방침이 비워진 초기 상태로 시작해, 실제 프로젝트 파일과 문서를 직접 입력·심사할 수 있습니다.',
+    story:
+      '우리 서비스의 실제 `package.json`, 클라우드 리전, 개인정보 처리방침 원문을 Step 1~4에 차례대로 입력해 맞춤형 출입국 심사를 실행하고 싶을 때 선택하세요.',
+    highlights: ['직접 파일 업로드', '실시간 매칭 프리뷰', 'Step 4 수동 보정'],
+    expected_verdict_hint: 'CUSTOM',
+    selected_regions: ['aws-seoul'],
+    has_separate_consent_ui: false,
     sample_package_json: JSON.stringify(
       {
         name: 'custom-service',
@@ -342,6 +766,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       2,
     ),
     sample_privacy_policy: '',
+    sample_infra_code: 'provider "aws" {\n  region = "ap-northeast-2"\n}',
     facts: {
       workspace: {
         business_country: 'KR',
@@ -351,6 +776,7 @@ export const DEMO_SCENARIOS: DemoScenario[] = [
       transfers: {
         has_cross_border: false,
         destination_countries: [],
+        infra_countries: [],
         detected_vendors: [],
         virtual_transfer: {
           foreign_iam_access: false,

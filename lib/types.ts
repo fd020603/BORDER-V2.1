@@ -165,6 +165,21 @@ export interface CanonicalFactModel {
   };
 }
 
+export type ManualLegalDocToggleKey =
+  | 'has_entrustment_disclosure'
+  | 'has_scc_or_safeguard_notice'
+  | 'has_separate_consent'
+  | 'disclosed_retention_period'
+  | 'disclosed_method_and_time'
+  | 'disclosed_opt_out_method'
+  | 'disclosed_dest_country_law_info'
+  | 'has_ai_training_opt_out_notice'
+  | 'has_do_not_sell_or_share_notice';
+
+export type LegalDocManualOverrides = Partial<
+  Record<ManualLegalDocToggleKey, boolean>
+>;
+
 export const DSL_OPERATORS = [
   'equals',
   'not_equals',
@@ -374,16 +389,12 @@ export interface AuditHistoryRecord {
     noPolicyDoc: boolean;
     infraCode: string;
     selectedRegions: string[];
+    hasSeparateConsentUi?: boolean;
+    manualLegalDocOverrides?: LegalDocManualOverrides;
   };
 }
 
-export type LlmProvider =
-  | 'GEMINI_CLOUD'
-  | 'OPENAI_CLOUD'
-  | 'ANTHROPIC_CLOUD'
-  | 'OPENROUTER_CLOUD'
-  | 'CUSTOM_CLOUD'
-  | 'LOCAL_OPENAI_COMPAT';
+export type LlmProvider = 'GEMINI_CLOUD' | 'LOCAL_OPENAI_COMPAT';
 
 export interface LlmConfig {
   provider: LlmProvider;

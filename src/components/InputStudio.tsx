@@ -5,6 +5,8 @@ import type {
   CanonicalFactModel,
   DetectedVendor,
   IndustryDomain,
+  LegalDocManualOverrides,
+  ManualLegalDocToggleKey,
   PolicyPackV2,
   TransferPurpose,
   VirtualTransferFacts,
@@ -29,6 +31,8 @@ interface InputStudioProps {
   infraCode: string;
   virtualTransfer: VirtualTransferFacts;
   security: CanonicalFactModel['security'];
+  hasSeparateConsentUi?: boolean;
+  manualLegalDocOverrides?: LegalDocManualOverrides;
   scenarios: DemoScenario[];
   activeScenarioId: string | null;
   activePacks?: PolicyPackV2[];
@@ -53,6 +57,12 @@ interface InputStudioProps {
   onChangeInfraCode: (code: string) => void;
   onChangeVirtualTransfer: (patch: Partial<VirtualTransferFacts>) => void;
   onChangeSecurity: (patch: Partial<CanonicalFactModel['security']>) => void;
+  onChangeHasSeparateConsentUi?: (val: boolean) => void;
+  onToggleManualLegalDocOverride?: (
+    key: ManualLegalDocToggleKey,
+    nextVal: boolean | undefined,
+  ) => void;
+  onResetManualLegalDocOverrides?: () => void;
   onLoadScenario: (scenarioId: string) => void;
   onRunInspection: () => void;
   onCancelInspection?: () => void;
@@ -71,6 +81,8 @@ export function InputStudio({
   infraCode,
   virtualTransfer,
   security,
+  hasSeparateConsentUi = false,
+  manualLegalDocOverrides = {},
   scenarios,
   activeScenarioId,
   activePacks = DEFAULT_POLICY_PACKS,
@@ -88,6 +100,9 @@ export function InputStudio({
   onChangeInfraCode,
   onChangeVirtualTransfer,
   onChangeSecurity,
+  onChangeHasSeparateConsentUi,
+  onToggleManualLegalDocOverride,
+  onResetManualLegalDocOverrides,
   onLoadScenario,
   onRunInspection,
   onCancelInspection,
@@ -126,6 +141,8 @@ export function InputStudio({
         infraCode={infraCode}
         virtualTransfer={virtualTransfer}
         security={security}
+        hasSeparateConsentUi={hasSeparateConsentUi}
+        manualLegalDocOverrides={manualLegalDocOverrides}
         activePacks={activePacks}
         inspectionState={inspectionState}
         onUpdateWorkspaceMeta={onUpdateWorkspaceMeta}
@@ -141,6 +158,9 @@ export function InputStudio({
         onChangeInfraCode={onChangeInfraCode}
         onChangeVirtualTransfer={onChangeVirtualTransfer}
         onChangeSecurity={onChangeSecurity}
+        onChangeHasSeparateConsentUi={onChangeHasSeparateConsentUi}
+        onToggleManualLegalDocOverride={onToggleManualLegalDocOverride}
+        onResetManualLegalDocOverrides={onResetManualLegalDocOverrides}
         onRunInspection={onRunInspection}
         onCancelInspection={onCancelInspection}
         onShowToast={onShowToast}

@@ -18,7 +18,9 @@ import {
   Loader2,
   Play,
   Plus,
+  RotateCcw,
   Shield,
+  SlidersHorizontal,
   Square,
   Trash2,
   UploadCloud,
@@ -31,6 +33,10 @@ import {
   buildVendorFromSdk,
   scanDependencyFile,
 } from '@/lib/dependency-scanner';
+import {
+  applyLegalDocOverrides,
+  extractHeuristicPayload,
+} from '@/lib/llm-parser';
 import { resolveRequiredPacks } from '@/lib/pack-loader';
 import { computeEffectiveHasCrossBorder } from '@/lib/rule-evaluator';
 import { lookupSdkMetadata } from '@/lib/sdk-registry';
@@ -39,6 +45,8 @@ import {
   type CanonicalFactModel,
   type DetectedVendor,
   type IndustryDomain,
+  type LegalDocManualOverrides,
+  type ManualLegalDocToggleKey,
   type PolicyPackV2,
   type TransferPurpose,
   type VirtualTransferFacts,
@@ -58,6 +66,8 @@ interface GuidedAuditWizardProps {
   infraCode: string;
   virtualTransfer: VirtualTransferFacts;
   security: CanonicalFactModel['security'];
+  hasSeparateConsentUi?: boolean;
+  manualLegalDocOverrides?: LegalDocManualOverrides;
   activePacks: PolicyPackV2[];
   inspectionState: InspectionStageState;
   onUpdateWorkspaceMeta: (patch: {
@@ -80,6 +90,12 @@ interface GuidedAuditWizardProps {
   onChangeInfraCode: (code: string) => void;
   onChangeVirtualTransfer: (patch: Partial<VirtualTransferFacts>) => void;
   onChangeSecurity: (patch: Partial<CanonicalFactModel['security']>) => void;
+  onChangeHasSeparateConsentUi?: (val: boolean) => void;
+  onToggleManualLegalDocOverride?: (
+    key: ManualLegalDocToggleKey,
+    nextVal: boolean | undefined,
+  ) => void;
+  onResetManualLegalDocOverrides?: () => void;
   onRunInspection: () => void;
   onCancelInspection?: () => void;
   onShowToast?: (message: string, variant?: ToastVariant) => void;
@@ -162,6 +178,24 @@ const PACK_SHORT_CODES: Record<string, string> = {
   EU_AI_ACT_v2: 'EU_AI_ACT',
 };
 
+const LEGAL_DOC_TOGGLE_ITEMS: Array<{
+  key: ManualLegalDocToggleKey;
+  label: string;
+}> = [
+  { key: 'has_entrustment_disclosure', label: '국외 처리위탁·보관 고지' },
+  { key: 'has_scc_or_safeguard_notice', label: 'SCC / DPF 등 보호조치 고지' },
+  { key: 'has_separate_consent', label: '별도 동의 체계' },
+  { key: 'disclosed_retention_period', label: '보유·이용 기간 명시' },
+  { key: 'disclosed_method_and_time', label: '이전 시기 및 방법 명시' },
+  { key: 'disclosed_opt_out_method', label: '거부권(Opt-out) 방법 안내' },
+  { key: 'disclosed_dest_country_law_info', label: '이전 대상국 법제 정보 고지' },
+  { key: 'has_ai_training_opt_out_notice', label: 'AI 활용 및 학습 거부 고지' },
+  {
+    key: 'has_do_not_sell_or_share_notice',
+    label: '판매·공유 거부(Do Not Sell) 고지',
+  },
+];
+
 function toShortPackCode(packId: string): string {
   if (PACK_SHORT_CODES[packId]) return PACK_SHORT_CODES[packId];
   return packId
@@ -182,6 +216,8 @@ export function GuidedAuditWizard({
   infraCode,
   virtualTransfer,
   security,
+  hasSeparateConsentUi = false,
+  manualLegalDocOverrides = {},
   activePacks,
   inspectionState,
   onUpdateWorkspaceMeta,
@@ -197,6 +233,9 @@ export function GuidedAuditWizard({
   onChangeInfraCode,
   onChangeVirtualTransfer,
   onChangeSecurity,
+  onChangeHasSeparateConsentUi,
+  onToggleManualLegalDocOverride,
+  onResetManualLegalDocOverrides,
   onRunInspection,
   onCancelInspection,
   onShowToast,
@@ -246,6 +285,75 @@ export function GuidedAuditWizard({
     virtualTransfer,
   ]);
 
+  const step4LegalDocAnalysis = useMemo(() => {
+    const heuristic = extractHeuristicPayload(
+      policyText,
+      infraCode,
+      detectedVendors,
+      noPolicyDoc,
+    );
+    const parsedBase: CanonicalFactModel['legal_doc'] = {
+      exists: heuristic.legal_doc?.exists ?? false,
+      claims_domestic_only: heuristic.legal_doc?.claims_domestic_only ?? false,
+      has_separate_consent: heuristic.legal_doc?.has_separate_consent ?? false,
+      has_entrustment_disclosure:
+        heuristic.legal_doc?.has_entrustment_disclosure ?? false,
+      disclosed_countries: heuristic.legal_doc?.disclosed_countries ?? [],
+      disclosed_vendors: heuristic.legal_doc?.disclosed_vendors ?? [],
+      disclosed_items: heuristic.legal_doc?.disclosed_items ?? [],
+      disclosed_method_and_time:
+        heuristic.legal_doc?.disclosed_method_and_time ?? false,
+      disclosed_retention_period:
+        heuristic.legal_doc?.disclosed_retention_period ?? false,
+      disclosed_opt_out_method:
+        heuristic.legal_doc?.disclosed_opt_out_method ?? false,
+      disclosed_dest_country_law_info:
+        heuristic.legal_doc?.disclosed_dest_country_law_info ?? false,
+      has_scc_or_safeguard_notice:
+        heuristic.legal_doc?.has_scc_or_safeguard_notice ?? false,
+      has_ai_training_opt_out_notice:
+        heuristic.legal_doc?.has_ai_training_opt_out_notice ?? false,
+      has_ai_service_notice: heuristic.legal_doc?.has_ai_service_notice ?? false,
+      has_ai_output_label_notice:
+        heuristic.legal_doc?.has_ai_output_label_notice ?? false,
+      has_do_not_sell_or_share_notice:
+        heuristic.legal_doc?.has_do_not_sell_or_share_notice ?? false,
+    };
+
+    const autoWithStep3 = applyLegalDocOverrides(parsedBase, {
+      noPolicyDoc,
+      hasSeparateConsentUi,
+    });
+    const effective = applyLegalDocOverrides(parsedBase, {
+      noPolicyDoc,
+      hasSeparateConsentUi,
+      manualLegalDocOverrides,
+    });
+    const manualOverrideCount = noPolicyDoc
+      ? 0
+      : LEGAL_DOC_TOGGLE_ITEMS.filter(
+          (item) => typeof manualLegalDocOverrides[item.key] === 'boolean',
+        ).length;
+    const detectedCount = LEGAL_DOC_TOGGLE_ITEMS.filter(
+      (item) => effective[item.key],
+    ).length;
+
+    return {
+      parsedBase,
+      autoWithStep3,
+      effective,
+      manualOverrideCount,
+      detectedCount,
+    };
+  }, [
+    policyText,
+    infraCode,
+    detectedVendors,
+    noPolicyDoc,
+    hasSeparateConsentUi,
+    manualLegalDocOverrides,
+  ]);
+
   const previewPackResolution = useMemo(() => {
     const previewFacts: CanonicalFactModel = {
       workspace: {
@@ -260,24 +368,7 @@ export function GuidedAuditWizard({
         virtual_transfer: virtualTransfer,
       },
       security,
-      legal_doc: {
-        exists: !noPolicyDoc && policyText.trim().length > 0,
-        claims_domestic_only: false,
-        has_separate_consent: false,
-        has_entrustment_disclosure: false,
-        disclosed_countries: [],
-        disclosed_vendors: [],
-        disclosed_items: [],
-        disclosed_method_and_time: false,
-        disclosed_retention_period: false,
-        disclosed_opt_out_method: false,
-        disclosed_dest_country_law_info: false,
-        has_scc_or_safeguard_notice: false,
-        has_ai_training_opt_out_notice: false,
-        has_ai_service_notice: false,
-        has_ai_output_label_notice: false,
-        has_do_not_sell_or_share_notice: false,
-      },
+      legal_doc: step4LegalDocAnalysis.effective,
     };
     return resolveRequiredPacks(previewFacts, activePacks, []);
   }, [
@@ -289,8 +380,7 @@ export function GuidedAuditWizard({
     detectedVendors,
     virtualTransfer,
     security,
-    noPolicyDoc,
-    policyText,
+    step4LegalDocAnalysis.effective,
     activePacks,
   ]);
 
@@ -976,7 +1066,7 @@ export function GuidedAuditWizard({
                   개인정보 처리방침 &amp; 기본 보안 점검
                 </h3>
                 <p className="text-xs text-zinc-400 mt-1">
-                  웹사이트에 올려둔 개인정보 처리방침 문구와 3가지 기본 보안 O/X 질문만 답하면 준비 끝입니다.
+                  웹사이트에 올려둔 개인정보 처리방침 문구와 4가지 기본 보안·UI O/X 질문만 답하면 준비 끝입니다.
                 </p>
               </div>
 
@@ -1080,11 +1170,11 @@ export function GuidedAuditWizard({
                 )}
               </div>
 
-              {/* 3 Non-Expert O/X Security Questions */}
+              {/* 4 Non-Expert O/X Security & UI Questions */}
               <div className="pt-4 border-t border-white/[0.06] space-y-3">
                 <div className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
                   <Shield className="w-4 h-4 text-cyan-400" />
-                  <span>기본 보안 및 해외 접근 O/X 점검 (3문항)</span>
+                  <span>기본 보안 및 해외 접근 O/X 점검 (4문항)</span>
                 </div>
 
                 <div className="space-y-2.5">
@@ -1252,6 +1342,56 @@ export function GuidedAuditWizard({
                         {!virtualTransfer.foreign_kms_control && (
                           <span
                             className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>아니오 (X)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* O/X 4: Separate Consent UI Checkbox */}
+                  <div className="rounded-lg border border-white/[0.07] bg-[#08080A] p-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div className="text-xs font-medium text-zinc-100">
+                        4. 회원가입·결제 화면에 국외이전/제3자 제공 &apos;별도 동의 체크박스&apos;를 구현했나요?
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        일반 약관과 분리된 미체크(Unchecked) 기본값의 별도 동의 UI가 있으면 &ldquo;예(O)&rdquo;입니다.
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        aria-pressed={hasSeparateConsentUi}
+                        onClick={() => onChangeHasSeparateConsentUi?.(true)}
+                        className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
+                          hasSeparateConsentUi
+                            ? 'bg-[#141419] border-emerald-400/70 text-emerald-200'
+                            : 'bg-[#0C0C0F] border-white/[0.07] text-zinc-400 hover:border-white/[0.15]'
+                        }`}
+                      >
+                        {hasSeparateConsentUi && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0"
+                            aria-hidden="true"
+                          />
+                        )}
+                        <span>예 (O)</span>
+                      </button>
+                      <button
+                        type="button"
+                        aria-pressed={!hasSeparateConsentUi}
+                        onClick={() => onChangeHasSeparateConsentUi?.(false)}
+                        className={`px-3 py-1.5 rounded border text-xs font-medium transition-colors whitespace-nowrap inline-flex items-center gap-1.5 ${
+                          !hasSeparateConsentUi
+                            ? 'bg-[#141419] border-zinc-500/70 text-zinc-200'
+                            : 'bg-[#0C0C0F] border-white/[0.07] text-zinc-400 hover:border-white/[0.15]'
+                        }`}
+                      >
+                        {!hasSeparateConsentUi && (
+                          <span
+                            className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0"
                             aria-hidden="true"
                           />
                         )}
@@ -1452,8 +1592,213 @@ export function GuidedAuditWizard({
                         ? '해당 있음 (위험)'
                         : '해당 없음 (안전)'}
                     </div>
+                    <div>
+                      별도 동의 체크박스 UI:{' '}
+                      {hasSeparateConsentUi ? '구현됨 (O)' : '미구현 (X)'}
+                    </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Human-in-the-loop Legal Doc Verification & Manual Override */}
+              <div className="rounded-lg border border-zinc-800 bg-[#08080A] p-4 space-y-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span>처리방침 자동 분석 결과 확인 (수동 보정 가능)</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 mt-1">
+                      {noPolicyDoc
+                        ? 'Step 3에서 처리방침 미보유를 선택하여 자동 분석 및 수동 보정이 비활성화되었습니다.'
+                        : '처리방침 원문에서 자동 추출된 법정 고지 항목입니다. 오탐이나 누락이 있으면 항목을 클릭해 상태를 직접 보정하세요.'}
+                    </p>
+                  </div>
+
+                  {!noPolicyDoc && (
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/10 font-mono text-[11px] text-emerald-300 tabular-nums">
+                        {step4LegalDocAnalysis.detectedCount} / {LEGAL_DOC_TOGGLE_ITEMS.length} 탐지됨
+                      </span>
+                      {step4LegalDocAnalysis.manualOverrideCount > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => onResetManualLegalDocOverrides?.()}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-zinc-700 bg-[#0C0C0F] hover:border-zinc-500 text-[11px] text-zinc-300 hover:text-zinc-100 transition-colors"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          <span>보정 초기화 ({step4LegalDocAnalysis.manualOverrideCount})</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {noPolicyDoc ? (
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3.5 py-2.5 text-xs text-amber-200 flex items-center justify-between gap-3">
+                    <span>
+                      처리방침 미보유 상태 — 심사 완료 후 우리 서비스에 맞는 국외 이전 고지문 초안이 자동 생성됩니다.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStep(3)}
+                      className="text-[11px] font-medium text-cyan-300 hover:text-cyan-200 whitespace-nowrap shrink-0"
+                    >
+                      Step 3 수정
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    {/* 9 Clickable Boolean Legal Doc Toggle Chips */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                      {LEGAL_DOC_TOGGLE_ITEMS.map((item) => {
+                        const autoVal = step4LegalDocAnalysis.autoWithStep3[item.key];
+                        const effectiveVal = step4LegalDocAnalysis.effective[item.key];
+                        const isManuallyOverridden =
+                          typeof manualLegalDocOverrides[item.key] === 'boolean';
+                        const isFromStep3Consent =
+                          item.key === 'has_separate_consent' &&
+                          hasSeparateConsentUi &&
+                          !isManuallyOverridden &&
+                          !step4LegalDocAnalysis.parsedBase.has_separate_consent;
+
+                        const handleToggle = () => {
+                          const nextVal = !effectiveVal;
+                          if (nextVal === autoVal) {
+                            onToggleManualLegalDocOverride?.(item.key, undefined);
+                          } else {
+                            onToggleManualLegalDocOverride?.(item.key, nextVal);
+                          }
+                        };
+
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            aria-pressed={effectiveVal}
+                            onClick={handleToggle}
+                            className={`rounded-lg border px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#38BDF8]/60 ${
+                              effectiveVal
+                                ? 'border-emerald-500/45 bg-emerald-500/[0.08] text-zinc-100 hover:border-emerald-400/70'
+                                : 'border-zinc-800 bg-[#0C0C0F] text-zinc-400 hover:border-zinc-700 hover:text-zinc-200'
+                            }`}
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <span className="text-xs font-medium leading-snug">
+                                {item.label}
+                              </span>
+                              <span
+                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium shrink-0 ${
+                                  effectiveVal
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/35'
+                                    : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/80'
+                                }`}
+                              >
+                                <span
+                                  aria-hidden="true"
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    effectiveVal ? 'bg-emerald-400' : 'bg-zinc-500'
+                                  }`}
+                                />
+                                {effectiveVal ? '탐지됨' : '미탐지'}
+                              </span>
+                            </div>
+
+                            {(isManuallyOverridden || isFromStep3Consent) && (
+                              <div className="mt-1.5 flex items-center gap-1.5">
+                                {isManuallyOverridden && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-blue-500/40 bg-blue-500/15 text-[10px] font-medium text-blue-300">
+                                    수동 보정됨
+                                  </span>
+                                )}
+                                {isFromStep3Consent && (
+                                  <span className="inline-flex items-center px-1.5 py-0.5 rounded border border-cyan-500/35 bg-cyan-500/10 text-[10px] font-medium text-cyan-300">
+                                    Step 3 UI 반영
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Read-only Extracted Array Fields */}
+                    <div className="pt-3 border-t border-zinc-800/80 grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px]">
+                      <div className="space-y-1.5">
+                        <div className="text-zinc-400 font-medium">
+                          고지된 이전 국가 (`disclosed_countries`)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {step4LegalDocAnalysis.effective.disclosed_countries.length > 0 ? (
+                            step4LegalDocAnalysis.effective.disclosed_countries.map(
+                              (country) => (
+                                <span
+                                  key={country}
+                                  className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-700 bg-[#0C0C0F] font-mono text-[11px] text-zinc-200"
+                                >
+                                  {country}
+                                </span>
+                              ),
+                            )
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-800 bg-[#0C0C0F] text-zinc-500">
+                              미탐지
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-zinc-400 font-medium">
+                          고지된 수탁·벤더 (`disclosed_vendors`)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {step4LegalDocAnalysis.effective.disclosed_vendors.length > 0 ? (
+                            step4LegalDocAnalysis.effective.disclosed_vendors.map(
+                              (vendor) => (
+                                <span
+                                  key={vendor}
+                                  className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-700 bg-[#0C0C0F] text-[11px] text-zinc-200"
+                                >
+                                  {vendor}
+                                </span>
+                              ),
+                            )
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-800 bg-[#0C0C0F] text-zinc-500">
+                              미탐지
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-zinc-400 font-medium">
+                          고지된 개인정보 항목 (`disclosed_items`)
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {step4LegalDocAnalysis.effective.disclosed_items.length > 0 ? (
+                            step4LegalDocAnalysis.effective.disclosed_items.map(
+                              (disclosedItem) => (
+                                <span
+                                  key={disclosedItem}
+                                  className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-700 bg-[#0C0C0F] text-[11px] text-zinc-200"
+                                >
+                                  {disclosedItem}
+                                </span>
+                              ),
+                            )
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded border border-zinc-800 bg-[#0C0C0F] text-zinc-500">
+                              미탐지
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="pt-2 flex flex-col items-center gap-3">

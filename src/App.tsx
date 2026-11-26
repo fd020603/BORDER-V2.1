@@ -12,6 +12,7 @@ import {
 import { DEMO_SCENARIOS } from '@/lib/demo-scenarios';
 import {
   LlmRequestCancelledError,
+  applyLegalDocOverrides,
   extractHeuristicPayload,
   parseInputsToFacts,
 } from '@/lib/llm-parser';
@@ -30,17 +31,20 @@ import type {
   DetectedVendor,
   IndustryDomain,
   LlmConfig,
+  ManualLegalDocToggleKey,
   PolicyPackV2,
   TransferPurpose,
   VirtualTransferFacts,
   WorkspaceProfile,
 } from '@/lib/types';
 import {
+  BookOpen,
   ChevronDown,
   ChevronUp,
   Loader2,
   SlidersHorizontal,
   Square,
+  X,
 } from 'lucide-react';
 import { AppShell, type MainTabId } from './components/AppShell';
 import { AuditHistoryTab } from './components/AuditHistoryTab';
@@ -87,6 +91,8 @@ function buildFallbackWorkspaceState(profile: WorkspaceProfile): ProfileWorkspac
       encryption_at_rest: true,
       pii_masked_before_transfer: false,
     },
+    hasSeparateConsentUi: false,
+    manualLegalDocOverrides: {},
     lastResult: null,
     lastEngineUsed: null,
     lastWarnings: [],
@@ -182,6 +188,34 @@ function buildFactsFromWorkspace(state: ProfileWorkspaceState): CanonicalFactMod
   );
   const transfers = buildTransfersFromWorkspace(state);
 
+  const rawLegalDoc: CanonicalFactModel['legal_doc'] = {
+    exists: heuristic.legal_doc?.exists ?? false,
+    claims_domestic_only: heuristic.legal_doc?.claims_domestic_only ?? false,
+    has_separate_consent: heuristic.legal_doc?.has_separate_consent ?? false,
+    has_entrustment_disclosure:
+      heuristic.legal_doc?.has_entrustment_disclosure ?? false,
+    disclosed_countries: heuristic.legal_doc?.disclosed_countries ?? [],
+    disclosed_vendors: heuristic.legal_doc?.disclosed_vendors ?? [],
+    disclosed_items: heuristic.legal_doc?.disclosed_items ?? [],
+    disclosed_method_and_time:
+      heuristic.legal_doc?.disclosed_method_and_time ?? false,
+    disclosed_retention_period:
+      heuristic.legal_doc?.disclosed_retention_period ?? false,
+    disclosed_opt_out_method:
+      heuristic.legal_doc?.disclosed_opt_out_method ?? false,
+    disclosed_dest_country_law_info:
+      heuristic.legal_doc?.disclosed_dest_country_law_info ?? false,
+    has_scc_or_safeguard_notice:
+      heuristic.legal_doc?.has_scc_or_safeguard_notice ?? false,
+    has_ai_training_opt_out_notice:
+      heuristic.legal_doc?.has_ai_training_opt_out_notice ?? false,
+    has_ai_service_notice: heuristic.legal_doc?.has_ai_service_notice ?? false,
+    has_ai_output_label_notice:
+      heuristic.legal_doc?.has_ai_output_label_notice ?? false,
+    has_do_not_sell_or_share_notice:
+      heuristic.legal_doc?.has_do_not_sell_or_share_notice ?? false,
+  };
+
   return {
     workspace: {
       business_country: state.businessCountry.toUpperCase(),
@@ -192,34 +226,11 @@ function buildFactsFromWorkspace(state: ProfileWorkspaceState): CanonicalFactMod
     },
     transfers,
     security: state.security,
-    legal_doc: {
-      exists: heuristic.legal_doc?.exists ?? false,
-      claims_domestic_only: heuristic.legal_doc?.claims_domestic_only ?? false,
-      has_separate_consent: heuristic.legal_doc?.has_separate_consent ?? false,
-      has_entrustment_disclosure:
-        heuristic.legal_doc?.has_entrustment_disclosure ?? false,
-      disclosed_countries: heuristic.legal_doc?.disclosed_countries ?? [],
-      disclosed_vendors: heuristic.legal_doc?.disclosed_vendors ?? [],
-      disclosed_items: heuristic.legal_doc?.disclosed_items ?? [],
-      disclosed_method_and_time:
-        heuristic.legal_doc?.disclosed_method_and_time ?? false,
-      disclosed_retention_period:
-        heuristic.legal_doc?.disclosed_retention_period ?? false,
-      disclosed_opt_out_method:
-        heuristic.legal_doc?.disclosed_opt_out_method ?? false,
-      disclosed_dest_country_law_info:
-        heuristic.legal_doc?.disclosed_dest_country_law_info ?? false,
-      has_scc_or_safeguard_notice:
-        heuristic.legal_doc?.has_scc_or_safeguard_notice ?? false,
-      has_ai_training_opt_out_notice:
-        heuristic.legal_doc?.has_ai_training_opt_out_notice ?? false,
-      has_ai_service_notice:
-        heuristic.legal_doc?.has_ai_service_notice ?? false,
-      has_ai_output_label_notice:
-        heuristic.legal_doc?.has_ai_output_label_notice ?? false,
-      has_do_not_sell_or_share_notice:
-        heuristic.legal_doc?.has_do_not_sell_or_share_notice ?? false,
-    },
+    legal_doc: applyLegalDocOverrides(rawLegalDoc, {
+      noPolicyDoc: state.noPolicyDoc,
+      hasSeparateConsentUi: state.hasSeparateConsentUi,
+      manualLegalDocOverrides: state.manualLegalDocOverrides,
+    }),
   };
 }
 
@@ -335,6 +346,11 @@ export default function App() {
         },
         transfers: buildTransfersFromWorkspace(workspaceState),
         security: workspaceState.security,
+        legal_doc: applyLegalDocOverrides(overrideFacts.legal_doc, {
+          noPolicyDoc: workspaceState.noPolicyDoc,
+          hasSeparateConsentUi: workspaceState.hasSeparateConsentUi,
+          manualLegalDocOverrides: workspaceState.manualLegalDocOverrides,
+        }),
       };
     }
     return buildFactsFromWorkspace(workspaceState);
@@ -350,26 +366,33 @@ export default function App() {
   const persistWorkspace = (
     nextState: ProfileWorkspaceState,
     recomputeNow = false,
+    forceRebuildFacts = false,
   ) => {
     let finalState = {
       ...nextState,
       updatedAt: new Date().toISOString(),
     };
     if (recomputeNow) {
-      const nextFacts = overrideFacts
-        ? {
-            ...overrideFacts,
-            workspace: {
-              business_country: finalState.businessCountry.toUpperCase(),
-              data_subject_countries: finalState.dataSubjectCountries.map((c) =>
-                c.toUpperCase(),
-              ),
-              industry_domain: finalState.industryDomain,
-            },
-            transfers: buildTransfersFromWorkspace(finalState),
-            security: finalState.security,
-          }
-        : buildFactsFromWorkspace(finalState);
+      const nextFacts =
+        overrideFacts && !forceRebuildFacts
+          ? {
+              ...overrideFacts,
+              workspace: {
+                business_country: finalState.businessCountry.toUpperCase(),
+                data_subject_countries: finalState.dataSubjectCountries.map((c) =>
+                  c.toUpperCase(),
+                ),
+                industry_domain: finalState.industryDomain,
+              },
+              transfers: buildTransfersFromWorkspace(finalState),
+              security: finalState.security,
+              legal_doc: applyLegalDocOverrides(overrideFacts.legal_doc, {
+                noPolicyDoc: finalState.noPolicyDoc,
+                hasSeparateConsentUi: finalState.hasSeparateConsentUi,
+                manualLegalDocOverrides: finalState.manualLegalDocOverrides,
+              }),
+            }
+          : buildFactsFromWorkspace(finalState);
       finalState = {
         ...finalState,
         lastResult: evaluateFacts(nextFacts, activePacks),
@@ -513,51 +536,66 @@ export default function App() {
     if (!scenario) return;
 
     const clonedFacts = cloneValue(scenario.facts);
-    const scenarioRegions: string[] = [];
-    if (clonedFacts.transfers.destination_countries.includes('JP')) {
-      scenarioRegions.push('aws-tokyo');
-    }
-    if (clonedFacts.transfers.destination_countries.includes('US')) {
-      scenarioRegions.push('aws-virginia');
-    }
-    if (
-      clonedFacts.transfers.destination_countries.includes('KR') ||
-      clonedFacts.workspace.business_country === 'KR'
-    ) {
-      scenarioRegions.push('aws-seoul');
-    }
+    const scenarioRegions: string[] =
+      scenario.selected_regions && scenario.selected_regions.length > 0
+        ? [...scenario.selected_regions]
+        : [];
+
     if (scenarioRegions.length === 0) {
-      scenarioRegions.push('aws-seoul');
+      if (clonedFacts.transfers.destination_countries.includes('JP')) {
+        scenarioRegions.push('aws-tokyo');
+      }
+      if (clonedFacts.transfers.destination_countries.includes('US')) {
+        scenarioRegions.push('aws-virginia');
+      }
+      if (
+        clonedFacts.transfers.destination_countries.includes('KR') ||
+        clonedFacts.workspace.business_country === 'KR'
+      ) {
+        scenarioRegions.push('aws-seoul');
+      }
+      if (scenarioRegions.length === 0) {
+        scenarioRegions.push('aws-seoul');
+      }
     }
 
-    const infraLines: string[] = [];
-    if (clonedFacts.transfers.destination_countries.includes('US')) {
-      infraLines.push('provider "aws" {', '  region = "us-east-1"', '}');
-    } else if (clonedFacts.transfers.destination_countries.includes('JP')) {
-      infraLines.push('provider "aws" {', '  region = "ap-northeast-1"', '}');
-    } else {
-      infraLines.push('provider "aws" {', '  region = "ap-northeast-2"', '}');
-    }
-    if (
-      clonedFacts.transfers.virtual_transfer.foreign_iam_access ||
-      clonedFacts.transfers.virtual_transfer.foreign_kms_control
-    ) {
-      infraLines.push(
-        'resource "aws_iam_role_policy" "us_hq_access" {',
-        `  foreign_iam_access = ${clonedFacts.transfers.virtual_transfer.foreign_iam_access}`,
+    let resolvedInfraCode = scenario.sample_infra_code ?? '';
+    if (!resolvedInfraCode) {
+      const infraLines: string[] = [];
+      if (clonedFacts.transfers.destination_countries.includes('US')) {
+        infraLines.push('provider "aws" {', '  region = "us-east-1"', '}');
+      } else if (clonedFacts.transfers.destination_countries.includes('JP')) {
+        infraLines.push('provider "aws" {', '  region = "ap-northeast-1"', '}');
+      } else {
+        infraLines.push('provider "aws" {', '  region = "ap-northeast-2"', '}');
+      }
+      if (
+        clonedFacts.transfers.virtual_transfer.foreign_iam_access ||
         clonedFacts.transfers.virtual_transfer.foreign_kms_control
-          ? '  kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/hq-key"'
-          : '  kms_key_id = "arn:aws:kms:ap-northeast-2:123456789012:key/local-key"',
-        '}',
-      );
+      ) {
+        infraLines.push(
+          'resource "aws_iam_role_policy" "us_hq_access" {',
+          `  foreign_iam_access = ${clonedFacts.transfers.virtual_transfer.foreign_iam_access}`,
+          clonedFacts.transfers.virtual_transfer.foreign_kms_control
+            ? '  kms_key_id = "arn:aws:kms:us-east-1:123456789012:key/hq-key"'
+            : '  kms_key_id = "arn:aws:kms:ap-northeast-2:123456789012:key/local-key"',
+          '}',
+        );
+      }
+      if (!clonedFacts.security.encryption_in_transit || !clonedFacts.security.encryption_at_rest) {
+        infraLines.push(
+          '# Security check flags',
+          `# encryption_in_transit=${clonedFacts.security.encryption_in_transit}`,
+          `# encryption_at_rest=${clonedFacts.security.encryption_at_rest}`,
+        );
+      }
+      resolvedInfraCode = infraLines.join('\n');
     }
-    if (!clonedFacts.security.encryption_in_transit || !clonedFacts.security.encryption_at_rest) {
-      infraLines.push(
-        '# Security check flags',
-        `# encryption_in_transit=${clonedFacts.security.encryption_in_transit}`,
-        `# encryption_at_rest=${clonedFacts.security.encryption_at_rest}`,
-      );
-    }
+
+    const hasSeparateConsentUi = Boolean(scenario.has_separate_consent_ui);
+    const manualLegalDocOverrides = scenario.manual_legal_doc_overrides
+      ? { ...scenario.manual_legal_doc_overrides }
+      : {};
 
     const result = evaluateFacts(clonedFacts, activePacks);
     const nextState: ProfileWorkspaceState = {
@@ -569,9 +607,11 @@ export default function App() {
       detectedVendors: clonedFacts.transfers.detected_vendors,
       policyText: scenario.sample_privacy_policy,
       noPolicyDoc: !clonedFacts.legal_doc.exists,
-      infraCode: infraLines.join('\n'),
+      infraCode: resolvedInfraCode,
       virtualTransfer: clonedFacts.transfers.virtual_transfer,
       security: clonedFacts.security,
+      hasSeparateConsentUi,
+      manualLegalDocOverrides,
       lastResult: result,
       lastEngineUsed: 'DEMO_PRESET',
       lastWarnings: [],
@@ -582,6 +622,9 @@ export default function App() {
     setOverrideFacts(clonedFacts);
     setIsDirty(false);
     setWorkspaceState(nextState);
+    if (scenario.expected_verdict_hint === 'CUSTOM') {
+      setInputStudioOpen(true);
+    }
     storageRepository.saveProfileState(nextState);
 
     const record: AuditHistoryRecord = {
@@ -603,6 +646,8 @@ export default function App() {
         noPolicyDoc: nextState.noPolicyDoc,
         infraCode: nextState.infraCode,
         selectedRegions: [...nextState.selectedRegions],
+        hasSeparateConsentUi,
+        manualLegalDocOverrides: { ...manualLegalDocOverrides },
       },
     };
     storageRepository.appendAuditHistory(record);
@@ -649,6 +694,8 @@ export default function App() {
           infraCountries: regionIdsToCountryCodes(workspaceState.selectedRegions),
           virtualTransferOverride: workspaceState.virtualTransfer,
           securityOverride: workspaceState.security,
+          hasSeparateConsentUi: workspaceState.hasSeparateConsentUi,
+          manualLegalDocOverrides: workspaceState.manualLegalDocOverrides,
           signal: controller.signal,
         },
       );
@@ -700,6 +747,10 @@ export default function App() {
           noPolicyDoc: nextState.noPolicyDoc,
           infraCode: nextState.infraCode,
           selectedRegions: [...nextState.selectedRegions],
+          hasSeparateConsentUi: Boolean(nextState.hasSeparateConsentUi),
+          manualLegalDocOverrides: {
+            ...(nextState.manualLegalDocOverrides ?? {}),
+          },
         },
       };
       storageRepository.appendAuditHistory(record);
@@ -893,6 +944,55 @@ export default function App() {
     );
   };
 
+  const handleChangeHasSeparateConsentUi = (val: boolean) => {
+    setOverrideFacts(null);
+    setIsDirty(true);
+    persistWorkspace(
+      {
+        ...workspaceState,
+        hasSeparateConsentUi: val,
+      },
+      true,
+      true,
+    );
+  };
+
+  const handleToggleManualLegalDocOverride = (
+    key: ManualLegalDocToggleKey,
+    nextVal: boolean | undefined,
+  ) => {
+    setOverrideFacts(null);
+    setIsDirty(true);
+    const nextOverrides = { ...(workspaceState.manualLegalDocOverrides ?? {}) };
+    if (nextVal === undefined) {
+      delete nextOverrides[key];
+    } else {
+      nextOverrides[key] = nextVal;
+    }
+    persistWorkspace(
+      {
+        ...workspaceState,
+        manualLegalDocOverrides: nextOverrides,
+      },
+      true,
+      true,
+    );
+  };
+
+  const handleResetManualLegalDocOverrides = () => {
+    setOverrideFacts(null);
+    setIsDirty(true);
+    persistWorkspace(
+      {
+        ...workspaceState,
+        manualLegalDocOverrides: {},
+      },
+      true,
+      true,
+    );
+    showToast('수동 보정 항목이 자동 분석 결과로 초기화되었습니다.', 'info');
+  };
+
   const handleRestoreHistoryRecord = (record: AuditHistoryRecord) => {
     const targetProfile = profiles.find((p) => p.id === record.profile_id);
     if (targetProfile) {
@@ -945,6 +1045,10 @@ export default function App() {
         record.facts_snapshot.transfers.virtual_transfer,
       ),
       security: cloneValue(record.facts_snapshot.security),
+      hasSeparateConsentUi: snapshot?.hasSeparateConsentUi ?? false,
+      manualLegalDocOverrides: snapshot?.manualLegalDocOverrides
+        ? { ...snapshot.manualLegalDocOverrides }
+        : {},
       lastResult: record.result_snapshot,
       updatedAt: new Date().toISOString(),
     };
@@ -1049,7 +1153,7 @@ export default function App() {
   };
 
   const activeScenario =
-    DEMO_SCENARIOS.find((s) => s.id === activeScenarioId) ?? DEMO_SCENARIOS[0];
+    DEMO_SCENARIOS.find((s) => s.id === activeScenarioId) ?? null;
 
   return (
     <>
@@ -1166,6 +1270,12 @@ export default function App() {
                     infraCode={workspaceState.infraCode}
                     virtualTransfer={workspaceState.virtualTransfer}
                     security={workspaceState.security}
+                    hasSeparateConsentUi={Boolean(
+                      workspaceState.hasSeparateConsentUi,
+                    )}
+                    manualLegalDocOverrides={
+                      workspaceState.manualLegalDocOverrides ?? {}
+                    }
                     activePacks={activePacks}
                     inspectionState={inspectionState}
                     onUpdateWorkspaceMeta={handleUpdateWorkspaceMeta}
@@ -1181,10 +1291,82 @@ export default function App() {
                     onChangeInfraCode={handleChangeInfraCode}
                     onChangeVirtualTransfer={handleChangeVirtualTransfer}
                     onChangeSecurity={handleChangeSecurity}
+                    onChangeHasSeparateConsentUi={
+                      handleChangeHasSeparateConsentUi
+                    }
+                    onToggleManualLegalDocOverride={
+                      handleToggleManualLegalDocOverride
+                    }
+                    onResetManualLegalDocOverrides={
+                      handleResetManualLegalDocOverrides
+                    }
                     onRunInspection={handleRunInspection}
                     onCancelInspection={handleCancelInspection}
                     onShowToast={showToast}
                   />
+                </div>
+              </div>
+            )}
+
+            {activeScenario && (
+              <div className="no-print rounded-xl border border-white/[0.08] bg-[#0C0C0F] px-4 py-3.5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)] animate-panel-enter">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <BookOpen className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <span className="text-xs font-semibold text-zinc-100">
+                        {activeScenario.short_label}
+                      </span>
+                      <span
+                        className={`font-mono text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                          activeScenario.expected_verdict_hint === 'APPROVED'
+                            ? 'text-emerald-300 border-emerald-500/30 bg-emerald-500/10'
+                            : activeScenario.expected_verdict_hint === 'DRIFT_DETECTED'
+                              ? 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+                              : activeScenario.expected_verdict_hint === 'DENIED'
+                                ? 'text-rose-300 border-rose-500/30 bg-rose-500/10'
+                                : 'text-zinc-300 border-white/[0.12] bg-white/[0.04]'
+                        }`}
+                      >
+                        {activeScenario.expected_verdict_hint === 'APPROVED'
+                          ? '예상 결과: 승인 (APPROVED)'
+                          : activeScenario.expected_verdict_hint === 'DRIFT_DETECTED'
+                            ? '예상 결과: 위조 여권 (DRIFT)'
+                            : activeScenario.expected_verdict_hint === 'DENIED'
+                              ? '예상 결과: 차단 (DENIED)'
+                              : '직접 입력 모드'}
+                      </span>
+                      <span className="font-mono text-[11px] text-cyan-400/90">
+                        {activeScenario.persona}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-zinc-300 leading-relaxed">
+                      {activeScenario.story}
+                    </p>
+
+                    {activeScenario.highlights.length > 0 && (
+                      <div className="pt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-zinc-400">
+                        <span className="text-zinc-500">핵심 관전 포인트:</span>
+                        {activeScenario.highlights.map((point, index) => (
+                          <span key={point} className="inline-flex items-center gap-2">
+                            {index > 0 && <span className="text-zinc-600">·</span>}
+                            <span className="text-zinc-300">{point}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveScenarioId(null)}
+                    aria-label="시나리오 설명 닫기"
+                    title="시나리오 설명 닫기"
+                    className="p-1 rounded-md text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.06] transition-colors shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
                 </div>
               </div>
             )}
@@ -1232,7 +1414,7 @@ export default function App() {
               <AuditReportPanel
                 sectionMode="banner"
                 scenarioTitle={
-                  activeScenarioId
+                  activeScenario
                     ? activeScenario.title
                     : activeProfile?.profile_name ?? '현재 워크스페이스'
                 }
@@ -1309,7 +1491,7 @@ export default function App() {
                   <AuditReportPanel
                     sectionMode="overview-extras"
                     scenarioTitle={
-                      activeScenarioId
+                      activeScenario
                         ? activeScenario.title
                         : activeProfile?.profile_name ?? '현재 워크스페이스'
                     }
@@ -1345,7 +1527,7 @@ export default function App() {
                 <AuditReportPanel
                   sectionMode="audit-list"
                   scenarioTitle={
-                    activeScenarioId
+                    activeScenario
                       ? activeScenario.title
                       : activeProfile?.profile_name ?? '현재 워크스페이스'
                   }
@@ -1425,16 +1607,8 @@ export default function App() {
           onSave={(nextConfig) => {
             storageRepository.saveLlmConfig(nextConfig);
             setLlmConfig(nextConfig);
-            const providerNames: Record<string, string> = {
-              GEMINI_CLOUD: 'Gemini Cloud',
-              OPENAI_CLOUD: 'OpenAI Cloud',
-              ANTHROPIC_CLOUD: 'Anthropic Claude',
-              OPENROUTER_CLOUD: 'OpenRouter',
-              CUSTOM_CLOUD: 'Custom Cloud LLM',
-              LOCAL_OPENAI_COMPAT: 'Local LLM',
-            };
             showToast(
-              `AI 엔진 설정 저장됨 (${providerNames[nextConfig.provider] ?? nextConfig.provider})`,
+              `AI 엔진 설정 저장됨 (${nextConfig.provider === 'LOCAL_OPENAI_COMPAT' ? 'Local LLM' : 'Gemini Cloud'})`,
               'success',
             );
           }}

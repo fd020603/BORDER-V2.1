@@ -131,16 +131,8 @@ export function AppShell({
   const activeTabMeta =
     ALL_NAV_ITEMS.find((t) => t.id === activeTab) ?? ALL_NAV_ITEMS[0];
 
-  const providerShortName: Record<string, string> = {
-    GEMINI_CLOUD: 'Gemini',
-    OPENAI_CLOUD: 'OpenAI',
-    ANTHROPIC_CLOUD: 'Claude',
-    OPENROUTER_CLOUD: 'OpenRouter',
-    CUSTOM_CLOUD: 'Custom',
-    LOCAL_OPENAI_COMPAT: 'Local',
-  };
   const llmBadgeText = `${
-    providerShortName[llmConfig.provider] ?? 'Cloud'
+    llmConfig.provider === 'LOCAL_OPENAI_COMPAT' ? 'Local' : 'Gemini'
   } · ${llmConfig.modelName || (llmConfig.provider === 'LOCAL_OPENAI_COMPAT' ? 'gemma-4-12b' : 'gemini-4-hydrogen')}`;
 
   const postureScore = Math.max(

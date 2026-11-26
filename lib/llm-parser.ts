@@ -4,16 +4,14 @@ import type {
   CanonicalFactModel,
   DetectedVendor,
   IndustryDomain,
+  LegalDocManualOverrides,
   LlmConfig,
+  ManualLegalDocToggleKey,
   VirtualTransferFacts,
 } from './types';
 
 export type ParserEngineUsed =
   | 'GEMINI_CLOUD'
-  | 'OPENAI_CLOUD'
-  | 'ANTHROPIC_CLOUD'
-  | 'OPENROUTER_CLOUD'
-  | 'CUSTOM_CLOUD'
   | 'LOCAL_OPENAI_COMPAT'
   | 'HEURISTIC_FALLBACK';
 
@@ -32,6 +30,8 @@ export interface ParseInputsOptions {
   infraCountries?: string[];
   virtualTransferOverride?: Partial<VirtualTransferFacts>;
   securityOverride?: Partial<CanonicalFactModel['security']>;
+  hasSeparateConsentUi?: boolean;
+  manualLegalDocOverrides?: LegalDocManualOverrides;
   signal?: AbortSignal;
 }
 
@@ -512,6 +512,78 @@ export function extractHeuristicPayload(
   };
 }
 
+export interface LegalDocOverrideOptions {
+  noPolicyDoc?: boolean;
+  hasSeparateConsentUi?: boolean;
+  manualLegalDocOverrides?: LegalDocManualOverrides;
+}
+
+const MANUAL_LEGAL_DOC_KEYS: ManualLegalDocToggleKey[] = [
+  'has_entrustment_disclosure',
+  'has_scc_or_safeguard_notice',
+  'has_separate_consent',
+  'disclosed_retention_period',
+  'disclosed_method_and_time',
+  'disclosed_opt_out_method',
+  'disclosed_dest_country_law_info',
+  'has_ai_training_opt_out_notice',
+  'has_do_not_sell_or_share_notice',
+];
+
+/**
+ * Merges CanonicalFactModel['legal_doc'] with strict 3-tier priority:
+ * 1. Highest: Step 4 manual toggle overrides (ignored when noPolicyDoc is true)
+ * 2. Second: Step 3 Q4 separate consent checkbox UI (forces has_separate_consent = true when true)
+ * 3. Third: Auto-parsed legal_doc fields from privacy policy text
+ */
+export function applyLegalDocOverrides(
+  base: CanonicalFactModel['legal_doc'],
+  options: LegalDocOverrideOptions = {},
+): CanonicalFactModel['legal_doc'] {
+  const merged: CanonicalFactModel['legal_doc'] = {
+    ...base,
+    disclosed_countries: [...(base.disclosed_countries ?? [])],
+    disclosed_vendors: [...(base.disclosed_vendors ?? [])],
+    disclosed_items: [...(base.disclosed_items ?? [])],
+  };
+
+  if (options.noPolicyDoc) {
+    merged.exists = false;
+    merged.claims_domestic_only = false;
+    merged.has_separate_consent = false;
+    merged.has_entrustment_disclosure = false;
+    merged.disclosed_countries = [];
+    merged.disclosed_vendors = [];
+    merged.disclosed_items = [];
+    merged.disclosed_method_and_time = false;
+    merged.disclosed_retention_period = false;
+    merged.disclosed_opt_out_method = false;
+    merged.disclosed_dest_country_law_info = false;
+    merged.has_scc_or_safeguard_notice = false;
+    merged.has_ai_training_opt_out_notice = false;
+    merged.has_ai_service_notice = false;
+    merged.has_ai_output_label_notice = false;
+    merged.has_do_not_sell_or_share_notice = false;
+  }
+
+  // Priority 2: Step 3 Q4 separate consent UI checkbox
+  if (options.hasSeparateConsentUi === true) {
+    merged.has_separate_consent = true;
+  }
+
+  // Priority 1: Step 4 manual Human-in-the-loop toggle overrides (only when policy doc exists/enabled)
+  if (!options.noPolicyDoc && options.manualLegalDocOverrides) {
+    for (const key of MANUAL_LEGAL_DOC_KEYS) {
+      const overrideValue = options.manualLegalDocOverrides[key];
+      if (typeof overrideValue === 'boolean') {
+        merged[key] = overrideValue;
+      }
+    }
+  }
+
+  return merged;
+}
+
 function mergeParsedFacts(
   heuristic: ExtractedLlmPayload,
   llmPayload: ExtractedLlmPayload | null,
@@ -618,6 +690,12 @@ function mergeParsedFacts(
     legalDoc.has_do_not_sell_or_share_notice = false;
   }
 
+  const finalLegalDoc = applyLegalDocOverrides(legalDoc, {
+    noPolicyDoc: options.noPolicyDoc,
+    hasSeparateConsentUi: options.hasSeparateConsentUi,
+    manualLegalDocOverrides: options.manualLegalDocOverrides,
+  });
+
   const security = {
     encryption_in_transit:
       options.securityOverride?.encryption_in_transit ??
@@ -672,10 +750,20 @@ function mergeParsedFacts(
   });
 
   const activeVendors = normalizedVendors.filter((v) => v.includes_pii !== false);
+  const infraCountries = Array.from(
+    new Set(
+      [
+        ...(options.infraCountries ?? []),
+        ...(llmPayload?.infra_countries ?? heuristic.infra_countries ?? []),
+      ]
+        .map((c) => c.toUpperCase())
+        .filter((c) => c.length > 0 && c !== businessCountry),
+    ),
+  );
+
   const destinationSet = new Set<string>(
     [
-      ...(options.infraCountries ?? []),
-      ...(llmPayload?.infra_countries ?? heuristic.infra_countries ?? []),
+      ...infraCountries,
       ...activeVendors.map((v) => v.data_residency_country),
     ]
       .map((c) => c.toUpperCase())
@@ -699,11 +787,12 @@ function mergeParsedFacts(
     transfers: {
       has_cross_border: hasCrossBorder,
       destination_countries: destinationCountries,
+      infra_countries: infraCountries,
       detected_vendors: normalizedVendors,
       virtual_transfer: virtualTransfer,
     },
     security,
-    legal_doc: legalDoc,
+    legal_doc: finalLegalDoc,
   };
 }
 
@@ -831,15 +920,10 @@ async function callLocalOpenAiWithRetry(
   llmConfig: LlmConfig,
   signal?: AbortSignal,
 ): Promise<{ payload: ExtractedLlmPayload; attempts: number }> {
-  const { chatUrl: endpoint, isLoopback } = normalizeLocalEndpoints(
+  const { chatUrl: endpoint } = normalizeLocalEndpoints(
     llmConfig.localEndpoint || 'http://127.0.0.1:1234/v1/chat/completions',
   );
   const modelName = llmConfig.modelName?.trim() || 'google/gemma-4-12b-qat';
-  const isRemoteHost =
-    typeof window !== 'undefined' &&
-    !['localhost', '127.0.0.1', '::1'].includes(
-      window.location.hostname.toLowerCase(),
-    );
 
   const baseInstruction = `Extract structured privacy compliance facts from the privacy policy text and infrastructure code below.
 Do NOT output reasoning, thinking steps, commentary, or markdown fences. Return ONLY a compact valid JSON object with keys:
@@ -887,59 +971,12 @@ Do NOT output reasoning, thinking steps, commentary, or markdown fences. Return 
     }
 
     try {
-      let response: Response;
-      if (isLoopback && isRemoteHost) {
-        // Cloud Run server cannot reach user's own 127.0.0.1/localhost; must call directly from browser.
-        response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestPayload),
-          signal,
-        });
-      } else {
-        const proxyRes = await fetch('/api/llm-proxy', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            endpoint,
-            payload: requestPayload,
-          }),
-          signal,
-        }).catch((proxyErr) => {
-          if (signal?.aborted) {
-            throw new LlmRequestCancelledError();
-          }
-          return null;
-        });
-
-        if (proxyRes === null || proxyRes.status === 404) {
-          // Static preview without /api/llm-proxy backend: fall back to direct fetch
-          response = await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(requestPayload),
-            signal,
-          });
-        } else if (
-          useJsonSchema &&
-          (proxyRes.status === 400 || proxyRes.status === 422)
-        ) {
-          useJsonSchema = false;
-          attempt--;
-          continue;
-        } else if (!proxyRes.ok) {
-          const errBody = (await proxyRes.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(
-            errBody.error
-              ? `프록시 오류(HTTP ${proxyRes.status}): ${errBody.error}`
-              : `프록시 오류 HTTP ${proxyRes.status}`,
-          );
-        } else {
-          response = proxyRes;
-        }
-      }
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestPayload),
+        signal,
+      });
 
       if (useJsonSchema && (response.status === 400 || response.status === 422)) {
         useJsonSchema = false;
@@ -1034,22 +1071,11 @@ export async function parseInputsToFacts(
   }
 
   if (llmConfig.provider !== 'LOCAL_OPENAI_COMPAT') {
-    const cloudProviderLabels: Record<string, string> = {
-      GEMINI_CLOUD: 'Cloud Gemini',
-      OPENAI_CLOUD: 'Cloud OpenAI',
-      ANTHROPIC_CLOUD: 'Cloud Anthropic Claude',
-      OPENROUTER_CLOUD: 'Cloud OpenRouter',
-      CUSTOM_CLOUD: 'Custom Cloud LLM',
-    };
-    const providerLabel =
-      cloudProviderLabels[llmConfig.provider] ?? 'Cloud LLM';
-
     try {
       const response = await fetch('/api/parse-facts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: llmConfig.provider,
           policyText: options.noPolicyDoc ? '' : policyText,
           infraCode,
           vendorNames: detectedVendors.map((v) => v.name),
@@ -1069,7 +1095,7 @@ export async function parseInputsToFacts(
               detectedVendors,
               options,
             ),
-            engineUsed: llmConfig.provider,
+            engineUsed: 'GEMINI_CLOUD',
             attempts: 1,
             warnings,
             latencyMs: Math.round(performance.now() - startedAt),
@@ -1082,18 +1108,16 @@ export async function parseInputsToFacts(
         code?: string;
       };
       warnings.push(
-        errPayload.code === 'MISSING_SERVER_KEY'
-          ? `${providerLabel} 서버 API 키가 미설정되어 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
-          : errPayload.error
-            ? `${providerLabel} 응답 불가(${errPayload.error}) — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
-            : `${providerLabel} 서버 키가 미설정되어 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`,
+        errPayload.error
+          ? `Cloud Gemini 응답 불가(${errPayload.error}) — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
+          : 'Cloud Gemini 응답 불가 — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.',
       );
     } catch (err) {
       if (options.signal?.aborted || err instanceof LlmRequestCancelledError) {
         throw new LlmRequestCancelledError();
       }
       warnings.push(
-        `${providerLabel} 엔드포인트 연결 실패 — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`,
+        'Cloud Gemini 연결 실패 — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.',
       );
     }
   } else if (llmConfig.provider === 'LOCAL_OPENAI_COMPAT') {

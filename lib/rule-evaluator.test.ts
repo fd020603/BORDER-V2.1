@@ -1,7 +1,11 @@
 import { DEFAULT_POLICY_PACKS } from './default-packs';
 import { DEMO_SCENARIOS } from './demo-scenarios';
 import { scanDependencyFile } from './dependency-scanner';
-import { extractHeuristicPayload, validateExtractedPayload } from './llm-parser';
+import {
+  applyLegalDocOverrides,
+  extractHeuristicPayload,
+  validateExtractedPayload,
+} from './llm-parser';
 import { resolvePackCatalog, resolveRequiredPacks } from './pack-loader';
 import {
   buildEvaluationContext,
@@ -633,9 +637,189 @@ runTest('14. 미고지 수신국(JP 사업자+AWS 서울+Case1 방침) 및 미�
   );
 });
 
+runTest('15. legal_doc 3단계 우선순위 병합 (Step 4 수동 보정 > Step 3 별도 동의 UI > 자동 파싱) 검증', () => {
+  const baseLegalDoc = makeBaseFacts().legal_doc;
+
+  // Priority 3: parsed value preserved when Step 3 Q4 is false and no manual override exists
+  const parsedOnly = applyLegalDocOverrides(
+    { ...baseLegalDoc, exists: true, has_separate_consent: true, has_scc_or_safeguard_notice: false },
+    { noPolicyDoc: false, hasSeparateConsentUi: false, manualLegalDocOverrides: {} },
+  );
+  assertEqual(
+    parsedOnly.has_separate_consent,
+    true,
+    'When Step 3 Q4 is false (X), parsed has_separate_consent=true must be preserved',
+  );
+
+  // Priority 2: Step 3 Q4 = true forces has_separate_consent = true even if parsed is false
+  const withStep3Ui = applyLegalDocOverrides(
+    { ...baseLegalDoc, exists: true, has_separate_consent: false },
+    { noPolicyDoc: false, hasSeparateConsentUi: true, manualLegalDocOverrides: {} },
+  );
+  assertEqual(
+    withStep3Ui.has_separate_consent,
+    true,
+    'Step 3 Q4 = true (O) must force legal_doc.has_separate_consent = true',
+  );
+
+  // Priority 1: Step 4 manual overrides beat both Step 3 Q4 and parsed values
+  const withManualOverrides = applyLegalDocOverrides(
+    {
+      ...baseLegalDoc,
+      exists: true,
+      has_separate_consent: false,
+      has_scc_or_safeguard_notice: false,
+      disclosed_retention_period: true,
+    },
+    {
+      noPolicyDoc: false,
+      hasSeparateConsentUi: true,
+      manualLegalDocOverrides: {
+        has_separate_consent: false,
+        has_scc_or_safeguard_notice: true,
+        disclosed_retention_period: false,
+        has_do_not_sell_or_share_notice: true,
+      },
+    },
+  );
+  assertEqual(
+    withManualOverrides.has_separate_consent,
+    false,
+    'Priority 1 manual override (false) must override Priority 2 Step 3 Q4 (true)',
+  );
+  assertEqual(
+    withManualOverrides.has_scc_or_safeguard_notice,
+    true,
+    'Priority 1 manual override (true) must override parsed false',
+  );
+  assertEqual(
+    withManualOverrides.disclosed_retention_period,
+    false,
+    'Priority 1 manual override (false) must override parsed true',
+  );
+  assertEqual(
+    withManualOverrides.has_do_not_sell_or_share_notice,
+    true,
+    'Priority 1 manual override must apply to CCPA Do Not Sell flag',
+  );
+
+  // noPolicyDoc = true hides/ignores Step 4 manual overrides while still honoring Step 3 Q4 UI flag
+  const withoutPolicyDoc = applyLegalDocOverrides(
+    { ...baseLegalDoc, exists: true, has_entrustment_disclosure: true },
+    {
+      noPolicyDoc: true,
+      hasSeparateConsentUi: true,
+      manualLegalDocOverrides: {
+        has_entrustment_disclosure: true,
+        has_scc_or_safeguard_notice: true,
+      },
+    },
+  );
+  assertEqual(withoutPolicyDoc.exists, false, 'noPolicyDoc=true must set exists=false');
+  assertEqual(
+    withoutPolicyDoc.has_entrustment_disclosure,
+    false,
+    'noPolicyDoc=true must ignore Step 4 manual overrides',
+  );
+  assertEqual(
+    withoutPolicyDoc.has_scc_or_safeguard_notice,
+    false,
+    'noPolicyDoc=true must ignore Step 4 manual overrides for safeguard notice',
+  );
+  assertEqual(
+    withoutPolicyDoc.has_separate_consent,
+    true,
+    'noPolicyDoc=true must still reflect Step 3 Q4 separate consent UI checkbox when true',
+  );
+});
+
+runTest('16. 확장된 8종 데모 프리셋 스토리 메타데이터 및 신규 케이스(Case 4~7) 판정 검증', () => {
+  assertEqual(
+    DEMO_SCENARIOS.length,
+    8,
+    'DEMO_SCENARIOS must contain 8 scenarios',
+  );
+
+  for (const scenario of DEMO_SCENARIOS) {
+    assert(
+      scenario.persona.trim().length > 0,
+      `${scenario.id} must have non-empty persona`,
+    );
+    assert(
+      scenario.story.trim().length > 20,
+      `${scenario.id} must have descriptive story`,
+    );
+    assert(
+      scenario.highlights.length >= 2,
+      `${scenario.id} must have at least 2 highlights`,
+    );
+    assert(
+      scenario.selected_regions.length >= 1,
+      `${scenario.id} must specify selected_regions`,
+    );
+  }
+
+  // Case 4: Global SaaS with Step 3 Q4 separate consent UI -> APPROVED
+  const case4 = DEMO_SCENARIOS.find(
+    (s) => s.id === 'case-4-global-consent-approved',
+  );
+  assert(case4, 'case-4-global-consent-approved must exist');
+  assertEqual(
+    case4!.has_separate_consent_ui,
+    true,
+    'Case 4 must enable has_separate_consent_ui',
+  );
+  const res4 = evaluateFacts(cloneFacts(case4!.facts), DEFAULT_POLICY_PACKS);
+  assertEqual(
+    res4.verdict,
+    'APPROVED',
+    `Case 4 verdict must be APPROVED (triggered: ${res4.triggered_rules.map((r) => `${r.rule_id}:${r.severity}`).join(', ')})`,
+  );
+  assertEqual(res4.stats.blocker_count, 0, 'Case 4 blocker_count must be 0');
+
+  // Case 5: JP business + KR/GB subjects + undisclosed AWS Seoul infra -> DRIFT_DETECTED
+  const case5 = DEMO_SCENARIOS.find((s) => s.id === 'case-5-jp-kr-infra-drift');
+  assert(case5, 'case-5-jp-kr-infra-drift must exist');
+  const res5 = evaluateFacts(cloneFacts(case5!.facts), DEFAULT_POLICY_PACKS);
+  assertEqual(res5.verdict, 'DRIFT_DETECTED', 'Case 5 verdict must be DRIFT_DETECTED');
+  assert(res5.stats.drift_count > 0, 'Case 5 drift_count must be > 0');
+  assert(
+    res5.triggered_rules.some((r) => r.rule_id === 'KR-PIPA-28-8-UNDISCLOSED-DEST'),
+    'Case 5 must trigger KR-PIPA-28-8-UNDISCLOSED-DEST',
+  );
+  assert(
+    res5.triggered_rules.some((r) => r.rule_id === 'JP-APPI-28-UNDISCLOSED-COUNTRY'),
+    'Case 5 must trigger JP-APPI-28-UNDISCLOSED-COUNTRY',
+  );
+
+  // Case 6: CN PIPL fintech blocked -> DENIED with CN_PIPL_v2 blocker
+  const case6 = DEMO_SCENARIOS.find((s) => s.id === 'case-6-cn-pipl-blocked');
+  assert(case6, 'case-6-cn-pipl-blocked must exist');
+  const res6 = evaluateFacts(cloneFacts(case6!.facts), DEFAULT_POLICY_PACKS);
+  assertEqual(res6.verdict, 'DENIED', 'Case 6 verdict must be DENIED');
+  assert(res6.stats.blocker_count > 0, 'Case 6 blocker_count must be > 0');
+  assert(
+    res6.triggered_rules.some((r) => r.pack_id === 'CN_PIPL_v2'),
+    'Case 6 must trigger CN_PIPL_v2 rules',
+  );
+
+  // Case 7: No policy doc MVP -> DENIED with legal_doc.exists === false
+  const case7 = DEMO_SCENARIOS.find((s) => s.id === 'case-7-no-policy-mvp');
+  assert(case7, 'case-7-no-policy-mvp must exist');
+  assertEqual(
+    case7!.facts.legal_doc.exists,
+    false,
+    'Case 7 must have legal_doc.exists === false',
+  );
+  const res7 = evaluateFacts(cloneFacts(case7!.facts), DEFAULT_POLICY_PACKS);
+  assertEqual(res7.verdict, 'DENIED', 'Case 7 verdict must be DENIED');
+  assert(res7.stats.blocker_count > 0, 'Case 7 blocker_count must be > 0');
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   throw new Error(`${failed} test(s) failed`);
 }
+
 
 

@@ -8,6 +8,7 @@ import type {
   DetectedVendor,
   EvaluationResult,
   IndustryDomain,
+  LegalDocManualOverrides,
   LlmConfig,
   PolicyPackV2,
   VirtualTransferFacts,
@@ -26,6 +27,8 @@ export interface ProfileWorkspaceState {
   infraCode: string;
   virtualTransfer: VirtualTransferFacts;
   security: CanonicalFactModel['security'];
+  hasSeparateConsentUi?: boolean;
+  manualLegalDocOverrides?: LegalDocManualOverrides;
   lastResult: EvaluationResult | null;
   lastEngineUsed: string | null;
   lastWarnings: string[];
@@ -136,6 +139,8 @@ function buildSeedData(): {
     ].join('\n'),
     virtualTransfer: cloneValue(case1.facts.transfers.virtual_transfer),
     security: cloneValue(case1.facts.security),
+    hasSeparateConsentUi: false,
+    manualLegalDocOverrides: {},
     lastResult: result1,
     lastEngineUsed: 'HEURISTIC_FALLBACK',
     lastWarnings: [],
@@ -159,6 +164,8 @@ function buildSeedData(): {
     ].join('\n'),
     virtualTransfer: cloneValue(case2.facts.transfers.virtual_transfer),
     security: cloneValue(case2.facts.security),
+    hasSeparateConsentUi: false,
+    manualLegalDocOverrides: {},
     lastResult: result2,
     lastEngineUsed: 'HEURISTIC_FALLBACK',
     lastWarnings: [],
@@ -522,7 +529,14 @@ class LocalStorageRepository implements StorageRepository {
     const raw = this.readRaw(STORAGE_KEYS.LLM_CONFIG);
     if (!raw) return DEFAULT_LLM_CONFIG;
     try {
-      return { ...DEFAULT_LLM_CONFIG, ...(JSON.parse(raw) as Partial<LlmConfig>) };
+      const parsed = JSON.parse(raw) as Partial<LlmConfig>;
+      if (
+        parsed.provider !== 'GEMINI_CLOUD' &&
+        parsed.provider !== 'LOCAL_OPENAI_COMPAT'
+      ) {
+        return DEFAULT_LLM_CONFIG;
+      }
+      return { ...DEFAULT_LLM_CONFIG, ...parsed };
     } catch {
       return DEFAULT_LLM_CONFIG;
     }

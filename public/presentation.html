@@ -1,0 +1,1836 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Border Checker v2.0 — 캡스톤 디자인 시연 발표 자료</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet"
+  />
+  <link
+    rel="stylesheet"
+    as="style"
+    crossorigin
+    href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css"
+  />
+  <style>
+    :root {
+      --bg-canvas: #09090b;
+      --bg-surface: #111114;
+      --bg-elevated: #16161b;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --text-primary: #f4f4f5;
+      --text-secondary: #a1a1aa;
+      --text-muted: #71717a;
+      --accent-cyan: #38bdf8;
+      --accent-emerald: #34d399;
+      --accent-amber: #fbbf24;
+      --accent-rose: #f43f5e;
+      --font-sans: 'Pretendard', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-display: 'Plus Jakarta Sans', 'Pretendard', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      background-color: #050507;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+    }
+
+    /* Top Control Bar (hidden in print) */
+    .deck-toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 52px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      background: rgba(9, 9, 11, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border-subtle);
+      z-index: 40;
+    }
+
+    .toolbar-brand {
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text-primary);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .toolbar-nav {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .toolbar-nav button {
+      background: none;
+      border: none;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      padding: 6px 2px;
+      white-space: nowrap;
+      transition: color 160ms ease;
+    }
+
+    .toolbar-nav button:hover,
+    .toolbar-nav button[aria-pressed='true'] {
+      color: var(--text-primary);
+    }
+
+    .toolbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+    }
+
+    .slide-counter {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-right: 4px;
+    }
+
+    .btn-subtle {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: border-color 160ms ease, background-color 160ms ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-subtle:hover {
+      border-color: var(--border-strong);
+      background: var(--bg-elevated);
+    }
+
+    .btn-primary {
+      background: var(--accent-cyan);
+      color: #04131c;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 7px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: opacity 160ms ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary:hover {
+      opacity: 0.9;
+    }
+
+    /* Stage Viewport */
+    .stage-viewport {
+      position: fixed;
+      inset: 52px 0 44px 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px 28px;
+      overflow: hidden;
+    }
+
+    .slide-frame {
+      width: 1280px;
+      height: 720px;
+      position: relative;
+      transform-origin: center center;
+      flex-shrink: 0;
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      width: 1280px;
+      height: 720px;
+      background: var(--bg-canvas);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 52px 64px 44px;
+      display: none;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-shadow: 0 28px 80px rgba(0, 0, 0, 0.55);
+    }
+
+    .slide.active {
+      display: flex;
+      animation: slideFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideFadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(6px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Slide Header & Footer */
+    .slide-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--text-muted);
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .slide-meta-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+
+    .slide-index {
+      color: var(--accent-cyan);
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .slide-header {
+      margin-top: 18px;
+      margin-bottom: 22px;
+    }
+
+    .slide-title {
+      font-family: var(--font-display);
+      font-size: 32px;
+      font-weight: 700;
+      line-height: 1.24;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      text-wrap: balance;
+    }
+
+    .slide-subtitle {
+      margin-top: 8px;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--text-secondary);
+      max-width: 980px;
+    }
+
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 0;
+    }
+
+    .slide-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 14px;
+      border-top: 1px solid var(--border-subtle);
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Typography & Layout Utilities */
+    .mono {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .text-cyan { color: var(--accent-cyan); }
+    .text-emerald { color: var(--accent-emerald); }
+    .text-amber { color: var(--accent-amber); }
+    .text-rose { color: var(--accent-rose); }
+    .text-secondary { color: var(--text-secondary); }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 24px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .grid-asymmetric {
+      display: grid;
+      grid-template-columns: 1.18fr 0.82fr;
+      gap: 28px;
+      align-items: stretch;
+    }
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 22px 24px;
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 10px;
+    }
+
+    .panel-desc {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+    }
+
+    .kpi-value {
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: 36px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .kpi-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+      line-height: 1.45;
+    }
+
+    .clean-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .clean-list li {
+      font-size: 14.5px;
+      line-height: 1.55;
+      color: #d4d4d8;
+      padding-left: 16px;
+      position: relative;
+    }
+
+    .clean-list li::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--accent-cyan);
+      font-family: var(--font-mono);
+    }
+
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13.5px;
+    }
+
+    .data-table th {
+      text-align: left;
+      font-weight: 600;
+      color: var(--text-secondary);
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-strong);
+      font-size: 12.5px;
+    }
+
+    .data-table td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: #e4e4e7;
+      vertical-align: middle;
+    }
+
+    .data-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .code-block {
+      background: #0a0a0d;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px 18px;
+      font-family: var(--font-mono);
+      font-size: 12.5px;
+      line-height: 1.65;
+      color: #d4d4d8;
+      white-space: pre;
+      overflow: hidden;
+    }
+
+    .divider-line {
+      height: 1px;
+      background: var(--border-subtle);
+      margin: 16px 0;
+    }
+
+    /* Slide 1 Cover Special */
+    .cover-layout {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 40px;
+      align-items: center;
+      height: 100%;
+    }
+
+    .cover-kicker {
+      font-size: 14px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+
+    .cover-title {
+      font-family: var(--font-display);
+      font-size: 52px;
+      font-weight: 800;
+      line-height: 1.12;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+      text-wrap: balance;
+    }
+
+    .cover-lead {
+      margin-top: 20px;
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--text-secondary);
+      max-width: 640px;
+    }
+
+    .cover-metrics {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 20px;
+      margin-top: 36px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    /* Bottom Navigation Bar */
+    .deck-bottombar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 44px;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(9, 9, 11, 0.92);
+      border-top: 1px solid var(--border-subtle);
+      z-index: 40;
+    }
+
+    .progress-track {
+      flex: 1;
+      max-width: 520px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 0 24px;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--accent-cyan);
+      transition: width 180ms ease;
+    }
+
+    .nav-arrows {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Presenter Notes Drawer */
+    .notes-drawer {
+      position: fixed;
+      left: 24px;
+      right: 24px;
+      bottom: 54px;
+      max-width: 1120px;
+      margin: 0 auto;
+      background: rgba(17, 17, 20, 0.96);
+      backdrop-filter: blur(14px);
+      border: 1px solid var(--border-strong);
+      border-radius: 12px;
+      padding: 16px 22px;
+      z-index: 50;
+      display: none;
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.65);
+    }
+
+    .notes-drawer.open {
+      display: block;
+    }
+
+    .notes-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      font-size: 12px;
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .notes-text {
+      font-size: 14px;
+      line-height: 1.65;
+      color: #e4e4e7;
+    }
+
+    /* Overview Grid Modal */
+    .overview-modal {
+      position: fixed;
+      inset: 52px 0 44px 0;
+      background: rgba(5, 5, 7, 0.96);
+      backdrop-filter: blur(10px);
+      z-index: 45;
+      padding: 28px 40px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .overview-modal.open {
+      display: block;
+    }
+
+    .overview-grid {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .overview-item {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 16px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 150ms ease, transform 150ms ease;
+    }
+
+    .overview-item:hover {
+      border-color: var(--accent-cyan);
+      transform: translateY(-2px);
+    }
+
+    .overview-item.current {
+      border-color: var(--accent-cyan);
+      background: #131922;
+    }
+
+    .overview-num {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-cyan);
+      margin-bottom: 6px;
+    }
+
+    .overview-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .overview-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+
+    /* Print / PDF Export Styles */
+    @page {
+      size: 1280px 720px landscape;
+      margin: 0;
+    }
+
+    @media print {
+      html,
+      body {
+        width: 1280px;
+        height: auto;
+        overflow: visible;
+        background: #09090b !important;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .deck-toolbar,
+      .deck-bottombar,
+      .notes-drawer,
+      .overview-modal {
+        display: none !important;
+      }
+
+      .stage-viewport {
+        position: static;
+        inset: auto;
+        padding: 0;
+        display: block;
+        overflow: visible;
+      }
+
+      .slide-frame {
+        width: 1280px !important;
+        height: auto !important;
+        transform: none !important;
+      }
+
+      .slide {
+        position: relative !important;
+        display: flex !important;
+        width: 1280px !important;
+        height: 720px !important;
+        border: none !important;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+        page-break-after: always;
+        break-after: page;
+        animation: none !important;
+      }
+
+      .slide:last-child {
+        page-break-after: auto;
+        break-after: auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Bar (3-zone contract) -->
+  <header class="deck-toolbar">
+    <div class="toolbar-brand">Border Checker v2.0</div>
+
+    <nav class="toolbar-nav" aria-label="슬라이드 도구">
+      <button type="button" id="btnOverview" aria-pressed="false">전체 목차 (G)</button>
+      <button type="button" id="btnNotes" aria-pressed="false">발표 대본 (N)</button>
+      <button type="button" id="btnFullscreen">전체 화면 (F)</button>
+      <button type="button" id="btnPrint">PDF 저장 / 인쇄</button>
+    </nav>
+
+    <div class="toolbar-actions">
+      <span class="slide-counter" id="slideCounter">01 / 12</span>
+      <a href="/" class="btn-primary">실시간 앱 열기</a>
+    </div>
+  </header>
+
+  <!-- Main Stage -->
+  <main class="stage-viewport" id="stageViewport">
+    <div class="slide-frame" id="slideFrame">
+
+      <!-- SLIDE 01: COVER -->
+      <section class="slide active" data-title="표지 · Border Checker v2.0" data-time="0:30"
+        data-notes="안녕하세요. 국경 간 개인정보 이전 및 처리방침-인프라 괴리(Policy-Infra Drift)를 자동으로 검증하는 AI-Native 데이터 주권 린터, Border Checker v2.0 발표를 시작하겠습니다. 오늘 발표에서는 개발 현장의 국외 이전 리스크 배경, 환각 없는 결정론적 아키텍처, 핵심 기능 4가지, 그리고 실제 앱 라이브 시연까지 순서대로 보여드리겠습니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">01</span>
+            <span>·</span>
+            <span>Capstone Design Final Presentation</span>
+          </div>
+          <div class="mono">Border Checker v2.0 · 2026</div>
+        </div>
+
+        <div class="slide-body">
+          <div class="cover-layout">
+            <div>
+              <div class="cover-kicker">AI-Native Data Sovereignty &amp; Policy-Infra Drift Linter</div>
+              <h1 class="cover-title">Border Checker v2.0</h1>
+              <p class="cover-lead">
+                개인정보 처리방침 문서와 실제 코드·클라우드 인프라 설정 간의 괴리를
+                결정론적 규칙 엔진으로 자동 탐지하고, 법무·개발 동시 치유 가이드를 제공하는
+                국경 간 데이터 컴플라이언스 검증 플랫폼
+              </p>
+              <div class="cover-metrics">
+                <div>
+                  <div class="kpi-value text-cyan">8 Packs</div>
+                  <div class="kpi-label">4-Layer 글로벌 법령 카탈로그<br />총 57개 결정론적 AST 규칙</div>
+                </div>
+                <div>
+                  <div class="kpi-value text-emerald">39 SDKs</div>
+                  <div class="kpi-label">AI·클라우드·결제·분석 SDK<br />자동 탐지 및 리전 추적</div>
+                </div>
+                <div>
+                  <div class="kpi-value">0%</div>
+                  <div class="kpi-label">판정 단계 LLM 환각률<br />100% 재현 가능한 AST 평가</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Inline SVG Geo-Arc & Border Shield Emblem -->
+            <div class="panel" style="padding: 28px; display: flex; flex-direction: column; justify-content: space-between; height: 420px; background: #0c0c10;">
+              <div style="font-size: 12px; color: var(--text-secondary);" class="mono">
+                GLOBAL BORDER TELEMETRY · OVERVIEW
+              </div>
+              <svg viewBox="0 0 420 260" width="100%" height="260" aria-label="국경 간 데이터 흐름 다이어그램">
+                <defs>
+                  <linearGradient id="arcPass" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#38BDF8" />
+                    <stop offset="100%" stop-color="#34D399" />
+                  </linearGradient>
+                  <linearGradient id="arcBlock" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#38BDF8" />
+                    <stop offset="100%" stop-color="#F43F5E" />
+                  </linearGradient>
+                </defs>
+                <!-- Subtle grid -->
+                <g stroke="rgba(255,255,255,0.05)" stroke-width="1">
+                  <line x1="20" y1="60" x2="400" y2="60" />
+                  <line x1="20" y1="120" x2="400" y2="120" />
+                  <line x1="20" y1="180" x2="400" y2="180" />
+                  <line x1="100" y1="20" x2="100" y2="230" />
+                  <line x1="210" y1="20" x2="210" y2="230" />
+                  <line x1="320" y1="20" x2="320" y2="230" />
+                </g>
+                <!-- Border gate line -->
+                <line x1="210" y1="22" x2="210" y2="236" stroke="rgba(244,63,94,0.45)" stroke-width="1.5" stroke-dasharray="5 5" />
+                <text x="210" y="16" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="10">BORDER GATE</text>
+
+                <!-- Compliant Arc KR -> EU -->
+                <path d="M 78 165 Q 200 42 340 82" fill="none" stroke="url(#arcPass)" stroke-width="2.5" />
+                <!-- Violating Arc KR -> US -->
+                <path d="M 78 165 Q 210 120 352 175" fill="none" stroke="url(#arcBlock)" stroke-width="2.5" stroke-dasharray="6 5" />
+
+                <!-- Origin KR -->
+                <circle cx="78" cy="165" r="9" fill="#09090b" stroke="#38BDF8" stroke-width="2.5" />
+                <circle cx="78" cy="165" r="3" fill="#38BDF8" />
+                <text x="78" y="194" text-anchor="middle" fill="#f4f4f5" font-family="JetBrains Mono" font-size="11" font-weight="600">KR (Seoul)</text>
+
+                <!-- Dest EU -->
+                <circle cx="340" cy="82" r="7" fill="#09090b" stroke="#34D399" stroke-width="2" />
+                <text x="340" y="64" text-anchor="middle" fill="#34D399" font-family="JetBrains Mono" font-size="11" font-weight="600">EU · PASS</text>
+
+                <!-- Dest US -->
+                <circle cx="352" cy="175" r="7" fill="#09090b" stroke="#F43F5E" stroke-width="2" />
+                <text x="352" y="202" text-anchor="middle" fill="#FDA4AF" font-family="JetBrains Mono" font-size="11" font-weight="600">US · DRIFT</text>
+
+                <!-- Shield X on violating arc -->
+                <g transform="translate(210, 146)">
+                  <rect x="-15" y="-15" width="30" height="30" rx="8" fill="#18090d" stroke="#F43F5E" stroke-width="1.8" />
+                  <path d="M -5 -5 L 5 5 M 5 -5 L -5 5" stroke="#FDA4AF" stroke-width="2" stroke-linecap="round" />
+                </g>
+              </svg>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; color: var(--text-secondary); padding-top: 12px; border-top: 1px solid var(--border-subtle);">
+                <span>Declared: 국내 단독 보관</span>
+                <span class="text-rose mono">Detected: US / JP Drift</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Capstone Design</span>
+          <span>키보드 ← / → 이동 · N 발표 대본 · G 목차</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 02: PROBLEM STATEMENT -->
+      <section class="slide" data-title="문제 정의 · Policy-Infra Drift" data-time="0:50"
+        data-notes="문제 배경입니다. 요즘 AI SaaS나 스타트업 서비스는 npm install openai나 stripe 한 줄만으로 고객 개인정보가 미국이나 일본 서버로 실시간 전송됩니다. 하지만 웹사이트 개인정보 처리방침에는 여전히 '모든 개인정보를 국내 서버에 단독 보관한다'고 적혀 있는 경우가 많습니다. 저희는 이처럼 문서와 실제 인프라가 어긋나는 현상을 '위조 여권(Policy-Infra Drift)'으로 정의했습니다. 실제로 한국 개인정보 보호법은 전체 매출액의 최대 3%, GDPR은 4%까지 과징금을 부과하며, 2026년 시행되는 AI 기본법까지 겹쳐 개발팀의 규제 부담이 폭발하고 있습니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">02</span>
+            <span>·</span>
+            <span>Problem Definition</span>
+          </div>
+          <div class="mono">Why Border Checker?</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">코드는 국경을 넘는데, 처리방침은 국내에 멈춰 있습니다</h2>
+          <p class="slide-subtitle">
+            생성형 AI API와 글로벌 SaaS SDK 도입은 1분이면 끝나지만, 개인정보 처리방침과 법정 고지는 갱신되지 않아 심각한
+            <strong style="color: var(--text-primary);">Policy-Infra Drift(위조 여권)</strong>가 발생합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-3" style="margin-bottom: 22px;">
+            <div class="panel">
+              <div class="mono text-rose" style="font-size: 12px; margin-bottom: 8px;">01 · 문서와 코드의 단절</div>
+              <div class="panel-title">처리방침 ≠ 실제 인프라</div>
+              <p class="panel-desc">
+                처리방침에는 "국내 단독 보관·국외 이전 없음"으로 기재되어 있으나, 실제
+                <span class="mono">package.json</span>에는 OpenAI, Stripe, Mixpanel 및 해외 AWS 리전이 연동되어 있습니다.
+              </p>
+            </div>
+            <div class="panel">
+              <div class="mono text-amber" style="font-size: 12px; margin-bottom: 8px;">02 · 보이지 않는 가상 국외 이전</div>
+              <div class="panel-title">국내 DB여도 해외 열람 시 국외 이전</div>
+              <p class="panel-desc">
+                데이터가 AWS 서울 리전에 저장되어 있어도 해외 본사 계정의 IAM 열람 권한이나 해외 KMS 키 통제가 있으면
+                법령상 국외 이전(Virtual Transfer)에 해당합니다.
+              </p>
+            </div>
+            <div class="panel">
+              <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 8px;">03 · 다중 국가·AI 법령 동시 충돌</div>
+              <div class="panel-title">PIPA · GDPR · APPI · AI Act 중첩</div>
+              <p class="panel-desc">
+                글로벌 고객 1명이 유입되는 순간 한국 개인정보 보호법뿐 아니라 EU GDPR, 일본 APPI,
+                미국 CLOUD Act·CCPA, AI 기본법까지 동시 적용됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="panel" style="padding: 18px 24px;">
+            <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px;">
+              <div>
+                <div class="mono text-rose" style="font-size: 22px; font-weight: 700;">매출 3% (최대 10%)</div>
+                <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">KR_PIPA 국외 이전·안전조치 위반 과징금</div>
+              </div>
+              <div>
+                <div class="mono text-rose" style="font-size: 22px; font-weight: 700;">매출 4% / €20M</div>
+                <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">EU_GDPR 제5장 국외 이전 위반 상한</div>
+              </div>
+              <div>
+                <div class="mono text-amber" style="font-size: 22px; font-weight: 700;">최대 1억 엔</div>
+                <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">JP_APPI PPC 시정명령 위반 법인 벌금</div>
+              </div>
+              <div>
+                <div class="mono text-cyan" style="font-size: 22px; font-weight: 700;">2026년 본격 시행</div>
+                <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">KR AI 기본법 제31조 · EU AI Act 제50조</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Problem Statement</span>
+          <span class="mono">02 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 03: APPROACH COMPARISON -->
+      <section class="slide" data-title="기존 방식 한계 vs 해결 전략" data-time="0:45"
+        data-notes="그렇다면 기존에는 어떻게 해결했을까요? 외부 로펌 검토는 비용과 시간이 많이 들어 매 배포마다 수행할 수 없고, 반대로 ChatGPT 같은 일반 LLM에게 처리방침을 통째로 던져 '위법인지 판단해줘'라고 물으면 실행할 때마다 답이 바뀌는 환각 문제가 발생합니다. 그래서 Border Checker는 역할을 철저히 분리했습니다. AI는 비정형 문서에서 사실(Fact)만 구조화해 추출하고, 최종 컴플라이언스 판정은 100% 결정론적인 AST 규칙 엔진이 수행합니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">03</span>
+            <span>·</span>
+            <span>Solution Strategy</span>
+          </div>
+          <div class="mono">Deterministic Hybrid Architecture</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">LLM에게 판정을 맡기지 않는 결정론적 하이브리드 설계</h2>
+          <p class="slide-subtitle">
+            기존 수동 법률 검토의 속도 한계와 단순 LLM 챗봇의 환각(Hallucination) 리스크를 동시에 해결합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="panel" style="padding: 8px 20px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 20%;">비교 항목</th>
+                  <th style="width: 25%;">수동 법률·보안 검토</th>
+                  <th style="width: 25%;">일반 LLM 챗봇 질의</th>
+                  <th style="width: 30%; color: var(--accent-cyan);">Border Checker v2.0</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style="font-weight: 600;">코드-문서 교차 검증</td>
+                  <td class="text-secondary">문서 위주 수동 대조 (인프라 누락 빈번)</td>
+                  <td class="text-secondary">프롬프트 의존 · SDK/리전 매핑 부정확</td>
+                  <td class="text-emerald"><strong>39종 SDK · 클라우드 리전 자동 스캔 + 1:1 대조</strong></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">판정 일관성 · 재현성</td>
+                  <td class="text-secondary">검토자별 해석 편차 존재</td>
+                  <td class="text-rose">실행마다 판정 변동 (환각·누락)</td>
+                  <td class="text-emerald"><strong>동일 입력 = 100% 동일 판정 (AST 결정론 엔진)</strong></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">비PII 오탐 방지</td>
+                  <td class="text-secondary">인터뷰로 일일이 확인 필요</td>
+                  <td class="text-secondary">SDK 존재만으로 일괄 위반 오탐</td>
+                  <td class="text-emerald"><strong>벤더별 PII 전송 여부·리전·위탁 특례 정밀 필터링</strong></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">신규 법률 확장성</td>
+                  <td class="text-secondary">외부 자문 재계약 필요</td>
+                  <td class="text-secondary">프롬프트 재작성 · 검증 불가</td>
+                  <td class="text-emerald"><strong>JSON Policy Pack 플러그인 업로드 (코드 수정 0줄)</strong></td>
+                </tr>
+                <tr>
+                  <td style="font-weight: 600;">개발 파이프라인 통합</td>
+                  <td class="text-secondary">출시 직전 일회성 점검</td>
+                  <td class="text-secondary">CI/CD 자동화 불가</td>
+                  <td class="text-emerald"><strong>CLI · GitHub Actions PR Gate 자동 차단</strong></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+            <div class="panel" style="padding: 16px 20px;">
+              <div class="mono text-cyan" style="font-size: 12px;">KEY PRINCIPLE 01 · 역할 분리</div>
+              <p class="panel-desc" style="margin-top: 6px;">
+                <strong style="color: var(--text-primary);">LLM / 휴리스틱 파서 = 사실(Fact) 추출 전용</strong> ·
+                <strong style="color: var(--text-primary);">AST 규칙 엔진 = 법령 조항 평가 전용</strong>
+              </p>
+            </div>
+            <div class="panel" style="padding: 16px 20px;">
+              <div class="mono text-emerald" style="font-size: 12px;">KEY PRINCIPLE 02 · 법률 가드레일</div>
+              <p class="panel-desc" style="margin-top: 6px;">
+                법률 자문 대체가 아닌 <strong style="color: var(--text-primary);">기술적 문서-인프라 정합성 린터</strong>로
+                설계하여 법정 고지 누락과 Drift를 사전에 자동 검출합니다.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Solution Strategy</span>
+          <span class="mono">03 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 04: SYSTEM ARCHITECTURE -->
+      <section class="slide" data-title="전체 시스템 아키텍처" data-time="0:50"
+        data-notes="전체 시스템 아키텍처입니다. 좌측 입력 계층에서 사용자가 설정한 사업자·고객 국가 정보와 package.json, requirements.txt, .env, 처리방침 텍스트가 유입됩니다. 중앙 추출 계층에서는 39종 SDK 레지스트리 스캐너와 멀티 프로바이더 서버 프록시(Gemini, OpenAI, Anthropic 등) 및 오프라인 휴리스틱 파서가 이를 표준 CanonicalFactModel JSON으로 정규화합니다. 이어서 결정론적 AST 규칙 엔진이 4계층 8개 정책 팩을 평가해 우측의 Geo-Arc 토폴로지 맵, 위조 여권 비교 카드, 법무·개발 듀얼 치유 키트, 그리고 CI/CD 게이트 결과를 출력합니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">04</span>
+            <span>·</span>
+            <span>System Architecture</span>
+          </div>
+          <div class="mono">End-to-End Pipeline</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">4단계 결정론적 컴플라이언스 검증 파이프라인</h2>
+          <p class="slide-subtitle">
+            React 19 + TypeScript + Express 서버사이드 프록시 기반 풀스택 아키텍처로 보안성과 확장성을 확보했습니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <!-- Architecture Diagram SVG -->
+          <div class="panel" style="padding: 20px 24px; background: #0c0c10;">
+            <svg viewBox="0 0 1100 320" width="100%" height="305" aria-label="Border Checker 시스템 아키텍처 다이어그램">
+              <defs>
+                <marker id="arrCyan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+                  <path d="M 0 1 L 8 5 L 0 9 z" fill="#38BDF8" />
+                </marker>
+              </defs>
+
+              <!-- Stage 1 -->
+              <rect x="10" y="24" width="230" height="270" rx="10" fill="#111114" stroke="rgba(255,255,255,0.12)" />
+              <text x="28" y="54" fill="#38BDF8" font-family="JetBrains Mono" font-size="11" font-weight="600">STAGE 1 · INPUT</text>
+              <text x="28" y="78" fill="#f4f4f5" font-family="Pretendard" font-size="15" font-weight="700">심사 대상 입력 계층</text>
+              <line x1="28" y1="92" x2="222" y2="92" stroke="rgba(255,255,255,0.08)" />
+              <text x="28" y="120" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 4단계 통합 위저드 UI</text>
+              <text x="28" y="148" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• package.json / requirements</text>
+              <text x="28" y="176" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• .env / Terraform / HTML</text>
+              <text x="28" y="204" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 개인정보 처리방침 원문</text>
+              <text x="28" y="232" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• IAM/KMS · 암호화 설정</text>
+              <text x="28" y="272" fill="#71717a" font-family="JetBrains Mono" font-size="11">Web Studio / CLI / REST API</text>
+
+              <!-- Arrow 1->2 -->
+              <line x1="240" y1="158" x2="282" y2="158" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrCyan)" />
+
+              <!-- Stage 2 -->
+              <rect x="290" y="24" width="240" height="270" rx="10" fill="#111114" stroke="rgba(56,189,248,0.35)" />
+              <text x="308" y="54" fill="#38BDF8" font-family="JetBrains Mono" font-size="11" font-weight="600">STAGE 2 · EXTRACTION</text>
+              <text x="308" y="78" fill="#f4f4f5" font-family="Pretendard" font-size="15" font-weight="700">팩트 추출 &amp; 정규화 계층</text>
+              <line x1="308" y1="92" x2="512" y2="92" stroke="rgba(255,255,255,0.08)" />
+              <text x="308" y="120" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 39종 SDK 레지스트리 매핑</text>
+              <text x="308" y="148" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 오프라인 휴리스틱 파서</text>
+              <text x="308" y="176" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 멀티 LLM 서버사이드 프록시</text>
+              <text x="320" y="198" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">(Gemini / OpenAI / Claude / Local)</text>
+              <text x="308" y="230" fill="#34D399" font-family="JetBrains Mono" font-size="12" font-weight="600">→ CanonicalFactModel</text>
+              <text x="308" y="272" fill="#71717a" font-family="JetBrains Mono" font-size="11">SSRF 방어 + 런타임 스키마 검증</text>
+
+              <!-- Arrow 2->3 -->
+              <line x1="530" y1="158" x2="572" y2="158" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrCyan)" />
+
+              <!-- Stage 3 -->
+              <rect x="580" y="24" width="235" height="270" rx="10" fill="#111114" stroke="rgba(52,211,153,0.4)" />
+              <text x="598" y="54" fill="#34D399" font-family="JetBrains Mono" font-size="11" font-weight="600">STAGE 3 · ENGINE</text>
+              <text x="598" y="78" fill="#f4f4f5" font-family="Pretendard" font-size="15" font-weight="700">결정론적 AST 규칙 엔진</text>
+              <line x1="598" y1="92" x2="797" y2="92" stroke="rgba(255,255,255,0.08)" />
+              <text x="598" y="120" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 4-Layer 8개 팩 자동 매칭</text>
+              <text x="598" y="148" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 57개 규칙 AST 재귀 평가</text>
+              <text x="598" y="176" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 미고지 수신국·벤더 1:1 대조</text>
+              <text x="598" y="204" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 비PII 제외 · 인프라 국가 보존</text>
+              <text x="598" y="232" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 커스텀 JSON 팩 동적 병합</text>
+              <text x="598" y="272" fill="#71717a" font-family="JetBrains Mono" font-size="11">100% Deterministic · 0 LLM Calls</text>
+
+              <!-- Arrow 3->4 -->
+              <line x1="815" y1="158" x2="857" y2="158" stroke="#38BDF8" stroke-width="2" marker-end="url(#arrCyan)" />
+
+              <!-- Stage 4 -->
+              <rect x="865" y="24" width="225" height="270" rx="10" fill="#111114" stroke="rgba(255,255,255,0.12)" />
+              <text x="883" y="54" fill="#FBBF24" font-family="JetBrains Mono" font-size="11" font-weight="600">STAGE 4 · OUTPUT</text>
+              <text x="883" y="78" fill="#f4f4f5" font-family="Pretendard" font-size="15" font-weight="700">시각화 &amp; 치유 출력 계층</text>
+              <line x1="883" y1="92" x2="1072" y2="92" stroke="rgba(255,255,255,0.08)" />
+              <text x="883" y="120" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• Geo-Arc 국경 토폴로지 맵</text>
+              <text x="883" y="148" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 위조 여권(Drift) 대조 카드</text>
+              <text x="883" y="176" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 치유 시뮬레이션(100% Preview)</text>
+              <text x="883" y="204" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• 법무·개발 Dual Remediation</text>
+              <text x="883" y="232" fill="#d4d4d8" font-family="Pretendard" font-size="12.5">• GitHub Actions / SARIF 출력</text>
+              <text x="883" y="272" fill="#71717a" font-family="JetBrains Mono" font-size="11">APPROVED / DRIFT / DENIED</text>
+            </svg>
+          </div>
+
+          <div style="margin-top: 16px; display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary);">
+            <span><strong style="color: var(--text-primary);">Frontend:</strong> React 19 · TypeScript · Tailwind CSS v4 · SVG Geo-Arc Canvas</span>
+            <span><strong style="color: var(--text-primary);">Backend &amp; Engine:</strong> Express · @google/genai · Deterministic JSON AST Evaluator · CLI</span>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · System Architecture</span>
+          <span class="mono">04 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 05: CORE TECH 1 - AST ENGINE -->
+      <section class="slide" data-title="핵심 기술 1 · 결정론적 AST 규칙 엔진" data-time="0:50"
+        data-notes="첫 번째 핵심 기술은 Canonical Fact Model과 결정론적 AST 규칙 엔진입니다. 모든 프로젝트 상태는 workspace, transfers, security, legal_doc, derived 다섯 영역의 단일 팩트 모델로 표준화됩니다. 정책 규칙은 코드에 하드코딩하지 않고 오른쪽 예시처럼 JSON AST 트리(all, any, not 및 9종 DSL 연산자)로 작성됩니다. 덕분에 새로운 국가 법률이나 사내 보안 정책이 생겨도 JSON 팩 파일 하나만 업로드하면 즉시 적용됩니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">05</span>
+            <span>·</span>
+            <span>Core Technology 01</span>
+          </div>
+          <div class="mono">Canonical Fact Model &amp; AST DSL</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">단일 진실 공급원(SSOT) 팩트 모델과 JSON AST DSL</h2>
+          <p class="slide-subtitle">
+            법령 조항을 코드가 아닌 선언적 JSON AST로 추상화하여 재현성, 감사 추적성, 플러그인 확장성을 동시에 달성했습니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-asymmetric">
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              <div class="panel">
+                <div class="panel-title">5-Domain Canonical Fact Model</div>
+                <ul class="clean-list" style="gap: 9px;">
+                  <li><span class="mono text-cyan">workspace</span> — 사업자 소재국, 고객 국가, 운영 분야(AI/핀테크/의료)</li>
+                  <li><span class="mono text-cyan">transfers</span> — 실제 도착국, 클라우드 리전(<span class="mono">infra_countries</span>), 벤더 목록, 가상 이전</li>
+                  <li><span class="mono text-cyan">security</span> — 전송 암호화(TLS), 저장 암호화(AES/KMS), 전송 전 PII 마스킹</li>
+                  <li><span class="mono text-cyan">legal_doc</span> — 처리방침 공개 국가·벤더·항목, 별도 동의, 위탁 고지, AI 표시</li>
+                  <li><span class="mono text-emerald">derived</span> — 미고지 수신국, 미공개 수탁사, 비적정성 국가, US FISA 노출 자동 파생</li>
+                </ul>
+              </div>
+
+              <div class="panel">
+                <div class="panel-title">9종 전용 DSL 연산자 &amp; 플러그인 스키마 검증</div>
+                <p class="panel-desc">
+                  <span class="mono" style="color: #e4e4e7;">equals · not_equals · includes · not_includes · subset_of · not_subset_of · is_empty · any_vendor_matches · all_vendors_match</span>
+                </p>
+                <p class="panel-desc" style="margin-top: 8px;">
+                  사용자 정의 정책 팩 업로드 시 <span class="mono">validatePolicyPackV2()</span>가 빈 combinator나 잘못된
+                  <span class="mono">drift_type</span>을 사전 차단하고 최신 버전을 자동 우선 적용(Superseding)합니다.
+                </p>
+              </div>
+            </div>
+
+            <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between; background: #0c0c10;">
+              <div>
+                <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 10px;">POLICY RULE AST EXAMPLE (KR_PIPA_v2)</div>
+                <div class="code-block">{
+  "rule_id": "KR-PIPA-28-8-UNDISCLOSED-DEST",
+  "severity": "BLOCKER",
+  "article_citation": "개인정보 보호법 제28조의8 제2항",
+  "condition_dsl": {
+    "any": [
+      {
+        "all": [
+          { "fact": "transfers.has_cross_border",
+            "operator": "equals", "value": true },
+          { "fact": "derived.has_undisclosed_destination_country",
+            "operator": "equals", "value": true }
+        ]
+      },
+      {
+        "all": [
+          { "fact": "workspace.business_country",
+            "operator": "not_equals", "value": "KR" },
+          { "fact": "workspace.data_subject_countries",
+            "operator": "includes", "value": "KR" },
+          { "fact": "legal_doc.disclosed_countries",
+            "operator": "not_includes",
+            "value": "@workspace.business_country" }
+        ]
+      }
+    ]
+  },
+  "drift_check": {
+    "enabled": true,
+    "drift_type": "UNDISCLOSED_COUNTRY"
+  }
+}</div>
+              </div>
+              <div style="font-size: 12px; color: var(--text-muted); margin-top: 10px;">
+                참조 표현식(<span class="mono">@workspace.business_country</span>)으로 동적 교차 대조 지원
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Core Technology 01</span>
+          <span class="mono">05 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 06: CORE TECH 2 - 4-LAYER POLICY CATALOG -->
+      <section class="slide" data-title="핵심 기술 2 · 4-Layer 글로벌 규제 카탈로그" data-time="0:45"
+        data-notes="두 번째 핵심 기능은 4개 계층, 총 8개 법령 팩, 57개 규칙으로 구성된 글로벌 규제 카탈로그입니다. 사용자가 Step 1에서 사업자 위치, 고객 국가, 운영 분야를 선택하는 즉시 적용 대상 법령 팩이 실시간 매칭됩니다. Layer 1은 한국·EU·일본·중국의 기본 개인정보 보호법, Layer 2는 미국 CLOUD Act 같은 역외 정보접근 리스크, Layer 3는 캘리포니아 CCPA/CPRA, Layer 4는 한국 AI 기본법과 EU AI Act의 투명성·학습 제외 의무를 다룹니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">06</span>
+            <span>·</span>
+            <span>Core Technology 02</span>
+          </div>
+          <div class="mono">4-Layer · 8 Policy Packs · 57 Rules</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">사업자·고객 국가·도메인에 따라 자동 매칭되는 4-Layer 규제 팩</h2>
+          <p class="slide-subtitle">
+            복잡한 글로벌 법령 중 내 서비스에 실제 적용되는 규칙만 실시간으로 필터링하여 평가합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="panel" style="padding: 6px 18px;">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width: 11%;">계층</th>
+                  <th style="width: 21%;">Policy Pack ID</th>
+                  <th style="width: 30%;">대상 법령</th>
+                  <th style="width: 28%;">주요 검증 범위</th>
+                  <th style="width: 10%; text-align: right;">규칙 수</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="mono text-cyan">Layer 1</td>
+                  <td class="mono">KR_PIPA_v2</td>
+                  <td>대한민국 개인정보 보호법</td>
+                  <td class="text-secondary">제28조의8 위탁 특례 · 가상 이전 · 미고지 수신국/수탁사</td>
+                  <td class="mono" style="text-align: right;">10</td>
+                </tr>
+                <tr>
+                  <td class="mono text-cyan">Layer 1</td>
+                  <td class="mono">EU_GDPR_v2</td>
+                  <td>EU 일반 개인정보보호법</td>
+                  <td class="text-secondary">제5장 적정성·DPF·SCC · 제9조 민감정보 · 미고지국</td>
+                  <td class="mono" style="text-align: right;">10</td>
+                </tr>
+                <tr>
+                  <td class="mono text-cyan">Layer 1</td>
+                  <td class="mono">JP_APPI_v2</td>
+                  <td>일본 개인정보보호법</td>
+                  <td class="text-secondary">제28조 외국 제3자 제공 · 상당조치 · 요배려정보</td>
+                  <td class="mono" style="text-align: right;">9</td>
+                </tr>
+                <tr>
+                  <td class="mono text-cyan">Layer 1</td>
+                  <td class="mono">CN_PIPL_v2</td>
+                  <td>중국 개인정보보호법</td>
+                  <td class="text-secondary">제38조 안전평가·표준계약 · 제39조 별도 동의</td>
+                  <td class="mono" style="text-align: right;">8</td>
+                </tr>
+                <tr>
+                  <td class="mono text-amber">Layer 2</td>
+                  <td class="mono">US_CLOUD_ACT_v2</td>
+                  <td>미국 CLOUD Act / FISA 702</td>
+                  <td class="text-secondary">미국 법인 서버·원격 접근 시 정부 영장 노출 리스크</td>
+                  <td class="mono" style="text-align: right;">4</td>
+                </tr>
+                <tr>
+                  <td class="mono text-amber">Layer 3</td>
+                  <td class="mono">US_CCPA_CPRA_v2</td>
+                  <td>캘리포니아 CCPA / CPRA</td>
+                  <td class="text-secondary">Do Not Sell/Share Opt-Out · 애널리틱스 공유 통제</td>
+                  <td class="mono" style="text-align: right;">8</td>
+                </tr>
+                <tr>
+                  <td class="mono text-emerald">Layer 4</td>
+                  <td class="mono">KR_AI_BASIC_ACT_v2</td>
+                  <td>대한민국 AI 기본법</td>
+                  <td class="text-secondary">제31조 생성형 AI 서비스 고지 · AI 결과물 표시 · ZDR</td>
+                  <td class="mono" style="text-align: right;">4</td>
+                </tr>
+                <tr>
+                  <td class="mono text-emerald">Layer 4</td>
+                  <td class="mono">EU_AI_ACT_v2</td>
+                  <td>EU 인공지능법 (2024/1689)</td>
+                  <td class="text-secondary">제50조 AI 투명성 의무 · 고위험 헬스케어·핀테크 점검</td>
+                  <td class="mono" style="text-align: right;">4</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · 4-Layer Regulatory Catalog</span>
+          <span class="mono">06 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 07: CORE TECH 3 - DRIFT & VIRTUAL TRANSFER -->
+      <section class="slide" data-title="핵심 기술 3 · 위조 여권(Drift) & 오탐 방지" data-time="0:50"
+        data-notes="세 번째 핵심 기술은 '위조 여권 탐지기'로 불리는 Policy-Infra Drift 교차 검증과 정교한 오탐 방지 메커니즘입니다. 단순히 처리방침에 국가가 하나라도 적혀 있으면 통과시키는 방식이 아니라, 실제 배포된 모든 클라우드 리전과 활성 PII 벤더를 처리방침 공개 목록과 1:1 전수 대조합니다. 동시에 Toss Payments처럼 개인정보를 보내지 않는 비PII 벤더는 체크 해제로 제외하되, 동일 국가에 배포된 AWS 서울 같은 핵심 인프라 리전은 누락 없이 보존합니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">07</span>
+            <span>·</span>
+            <span>Core Technology 03</span>
+          </div>
+          <div class="mono">Policy-Infra Drift &amp; False-Positive Defense</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">5대 위조 여권(Drift) 유형 전수 대조와 정밀 오탐 방지</h2>
+          <p class="slide-subtitle">
+            처리방침의 선언과 실제 인프라·SDK 동작 사이의 미세한 불일치까지 놓치지 않으면서, 실무 오탐은 최소화합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-2">
+            <div class="panel">
+              <div class="panel-title">5대 Policy-Infra Drift 자동 분류 체계</div>
+              <div class="divider-line"></div>
+              <ul class="clean-list" style="gap: 13px;">
+                <li>
+                  <strong class="text-rose">국내보관 모순</strong> <span class="mono text-secondary">(DOMESTIC_CLAIM_CONTRADICTION)</span><br />
+                  <span style="font-size: 13px; color: var(--text-secondary);">방침은 "국내 단독 보관" 선언 ↔ 실제 해외 리전/SDK 전송 탐지</span>
+                </li>
+                <li>
+                  <strong class="text-rose">미공개 이전국</strong> <span class="mono text-secondary">(UNDISCLOSED_COUNTRY)</span><br />
+                  <span style="font-size: 13px; color: var(--text-secondary);">US만 고지하고 실제 AWS 서울(KR) 또는 도쿄(JP) 추가 저장 시 적발</span>
+                </li>
+                <li>
+                  <strong class="text-amber">미공개 수탁사</strong> <span class="mono text-secondary">(UNDISCLOSED_VENDOR)</span><br />
+                  <span style="font-size: 13px; color: var(--text-secondary);">OpenAI만 고지했으나 코드에 Stripe·Mixpanel PII 전송이 추가된 경우</span>
+                </li>
+                <li>
+                  <strong class="text-rose">가상 이전 누락</strong> <span class="mono text-secondary">(VIRTUAL_TRANSFER_OMISSION)</span><br />
+                  <span style="font-size: 13px; color: var(--text-secondary);">국내 DB지만 해외 본사 IAM 열람 권한·해외 KMS 키 통제 존재</span>
+                </li>
+                <li>
+                  <strong class="text-amber">보호조치 불일치</strong> <span class="mono text-secondary">(SAFEGUARD_CLAIM_MISMATCH)</span><br />
+                  <span style="font-size: 13px; color: var(--text-secondary);">ZDR·DPF·암호화 보호조치 선언 대비 실제 설정 미충족</span>
+                </li>
+              </ul>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 18px;">
+              <div class="panel">
+                <div class="mono text-emerald" style="font-size: 12px; margin-bottom: 6px;">PRECISION 01 · 오탐 방지 2문항</div>
+                <div class="panel-title">비PII 제외 &amp; 처리위탁 특례 구분</div>
+                <p class="panel-desc">
+                  탐지된 SDK별로 <strong style="color: var(--text-primary);">① 개인정보 전송 여부(<span class="mono">includes_pii</span>)</strong>와
+                  <strong style="color: var(--text-primary);">② 이용 목적(처리위탁 vs 제3자 제공)</strong>을 구분하여,
+                  개인정보 보호법 제28조의8 제1항 제3호(계약 이행 위탁 특례)를 정확히 판별합니다.
+                </p>
+              </div>
+
+              <div class="panel">
+                <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 6px;">PRECISION 02 · 인프라 국가 보존</div>
+                <div class="panel-title">비PII 벤더 제외와 클라우드 리전 분리 추적</div>
+                <p class="panel-desc">
+                  특정 국가의 SDK를 비PII로 제외하더라도, 동일 국가에 배포된 핵심 스토리지 리전(<span class="mono">infra_countries</span>)은
+                  독립 추적하여 일본 사업자가 AWS 서울 리전을 미고지한 사례 같은 사각지대를 원천 차단했습니다.
+                </p>
+              </div>
+
+              <div class="panel" style="padding: 16px 20px; background: #0c0c10;">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 13px;">
+                  <span class="text-secondary">처리방침 명시: <strong style="color: #e4e4e7;">US (OpenAI LLC)</strong></span>
+                  <span class="mono text-rose" style="font-weight: 700;">≠ 불일치</span>
+                  <span class="text-secondary">실제 탐지: <strong class="text-rose">KR · US (AWS 서울 + Stripe)</strong></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Policy-Infra Drift Detection</span>
+          <span class="mono">07 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 08: CORE TECH 4 - VISUALIZATION & DUAL REMEDIATION -->
+      <section class="slide" data-title="핵심 기술 4 · 시각화 & 듀얼 치유 키트" data-time="0:45"
+        data-notes="네 번째는 개발자와 법무 담당자 모두가 한눈에 리스크를 파악하고 바로 고칠 수 있도록 설계한 시각화 및 치유 기능입니다. 상단의 도트 매트릭스 세계지도 기반 Geo-Arc 맵은 적법한 경로를 청록색 실선으로, 차단된 경로를 붉은 점선과 방패(X) 아이콘으로 표시합니다. 하단에서는 치유 적용 시 점수가 100%로 회복되는 시뮬레이션 토글과 함께, 법무팀용 처리방침 개정 조항과 개발팀용 리전·암호화 패치 가이드를 동시에 제공합니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">08</span>
+            <span>·</span>
+            <span>Core Technology 04</span>
+          </div>
+          <div class="mono">Visual Storytelling &amp; Dual Remediation</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">한눈에 읽히는 국경 토폴로지와 법무·개발 동시 치유 키트</h2>
+          <p class="slide-subtitle">
+            "무엇이 문제인가"에서 멈추지 않고 "어디가 막혔고, 문서와 코드를 어떻게 고쳐야 하는가"까지 즉시 안내합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-3">
+            <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 8px;">VISUAL 01</div>
+                <div class="panel-title">Geo-Arc &amp; 4단계 출입국 맵</div>
+                <p class="panel-desc">
+                  도트 매트릭스 세계지도 위로 출발국에서 US·EU·JP·CN·KR로 이어지는 데이터 아크를 렌더링하고,
+                  하단 4단계 보안·스토리지·출입국 게이트와 상태를 실시간 동기화합니다.
+                </p>
+              </div>
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 12.5px; color: var(--text-secondary);">
+                적법 아크: 청록 실선 · 위반 아크: 크림슨 점선 + Shield X
+              </div>
+            </div>
+
+            <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div class="mono text-emerald" style="font-size: 12px; margin-bottom: 8px;">VISUAL 02</div>
+                <div class="panel-title">준수율 링 &amp; 치유 시뮬레이션</div>
+                <p class="panel-desc">
+                  원형 준수율 링과 법령 팩별 <span class="mono">PASS / WARNING / BLOCKER</span> 스택 바를 제공하며,
+                  '치유 적용 시 예상 결과 미리보기' 토글로 개선 후 100% 달성 상태를 즉시 시뮬레이션합니다.
+                </p>
+              </div>
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 12.5px; color: var(--text-secondary);">
+                Drift 카테고리·규칙명 100% 한국어 현지화 사전 적용
+              </div>
+            </div>
+
+            <div class="panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+              <div>
+                <div class="mono text-amber" style="font-size: 12px; margin-bottom: 8px;">ACTION 03</div>
+                <div class="panel-title">Dual Remediation Kit</div>
+                <p class="panel-desc">
+                  위반 규칙마다 <strong style="color: var(--text-primary);">① 법무팀용 처리방침 개정 문안</strong>과
+                  <strong style="color: var(--text-primary);">② 개발팀용 인프라·SDK 패치 가이드</strong>(국내 리전 전환, ZDR, PII 마스킹, TLS/KMS)를 함께 생성합니다.
+                </p>
+              </div>
+              <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border-subtle); font-size: 12.5px; color: var(--text-secondary);">
+                원클릭 복사 + Markdown/JSON 감사 리포트 내보내기
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Visual Analytics &amp; Remediation</span>
+          <span class="mono">08 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 09: DEVSECOPS & SECURITY -->
+      <section class="slide" data-title="DevSecOps · CI/CD Gate & 보안 설계" data-time="0:40"
+        data-notes="웹 대시보드에서 끝나는 것이 아니라, 실제 개발팀 배포 파이프라인에 넣을 수 있도록 CLI와 GitHub Actions CI/CD Gate를 구현했습니다. npm run lint:border 명령이 PR 시점에 package.json과 처리방침을 자동 스캔해 BLOCKER나 DRIFT가 있으면 exit code 1로 병합을 차단합니다. 또한 LLM 연동 시 API 키가 브라우저에 절대 노출되지 않도록 서버사이드 프록시와 SSRF 호스트 화이트리스트를 적용했습니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">09</span>
+            <span>·</span>
+            <span>DevSecOps &amp; Security</span>
+          </div>
+          <div class="mono">CI/CD Gate &amp; Zero-Leak Proxy</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">PR 단계 자동 차단(CI/CD Gate)과 보안 중심 서버 아키텍처</h2>
+          <p class="slide-subtitle">
+            배포 전 컴플라이언스 회귀를 자동 차단하고, AI 키 보안과 네트워크 안전성을 엔터프라이즈 수준으로 설계했습니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-2">
+            <div class="panel" style="background: #0c0c10;">
+              <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 10px;">CLI &amp; GITHUB ACTIONS GATE</div>
+              <div class="code-block">$ npm run lint:border -- \
+  --deps package.json \
+  --infra .env.example \
+  --policy docs/privacy-policy.md \
+  --business-country KR \
+  --subjects KR,EU,US \
+  --industry AI_SAAS \
+  --fail-on BLOCKER,DRIFT
+
+[Border Checker CLI]
+Evaluated: 5 packs · 36 rules
+Verdict:   DRIFT_DETECTED (Blocker: 3, Drift: 2)
+Exit Code: 1  → PR Merge Blocked</div>
+              <p class="panel-desc" style="margin-top: 12px;">
+                GitHub Actions YAML 자동 생성 및 JSON/SARIF 형식 결과 파일 출력을 지원해 PR 코멘트와 보안 탭에 즉시 연동됩니다.
+              </p>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 16px;">
+              <div class="panel">
+                <div class="panel-title">서버사이드 멀티 프로바이더 LLM 프록시</div>
+                <p class="panel-desc">
+                  Gemini, OpenAI, Anthropic, OpenRouter 및 사내 OpenAI 호환 엔드포인트(vLLM/Ollama)를
+                  모두 Express <span class="mono">/api/*</span> 프록시 경유로 처리합니다. API 키는 서버 환경변수에만 보관되며
+                  브라우저에 노출되지 않습니다.
+                </p>
+              </div>
+              <div class="panel">
+                <div class="panel-title">SSRF 방어 &amp; 오프라인 무중단 폴백</div>
+                <p class="panel-desc">
+                  로컬 LLM 프록시 대상 호스트에 DNS 조회·사설 IP 검증 화이트리스트를 적용해 SSRF를 방지하며,
+                  LLM 키가 없는 환경에서도 내장 휴리스틱 파서 + 결정론 엔진만으로 100% 동작합니다.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · DevSecOps &amp; Security</span>
+          <span class="mono">09 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 10: LIVE DEMO SCENARIO -->
+      <section class="slide" data-title="라이브 시연 시나리오" data-time="0:30"
+        data-notes="이제 실제 웹 애플리케이션으로 전환해 라이브 시연을 진행하겠습니다. 시연은 세 가지 시나리오와 실시간 조합 변경으로 보여드리겠습니다. 먼저 Case 1 정상 승인 케이스를 확인한 뒤, Case 2 위조 여권(Drift)에서 문서와 인프라의 모순과 치유 시뮬레이션 토글을 보여드리고, 마지막으로 Case 3 가상 국외 이전과 실시간 국가·리전 변경에 따른 즉각적인 규칙 재평가를 시연하겠습니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">10</span>
+            <span>·</span>
+            <span>Live Demonstration Plan</span>
+          </div>
+          <div class="mono">Interactive Demo Walkthrough</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">라이브 시연 시나리오 (3단계 핵심 케이스 + 실시간 조합)</h2>
+          <p class="slide-subtitle">
+            상단 '실시간 앱 열기' 버튼을 눌러 실제 Border Checker v2.0 화면에서 아래 시나리오를 순서대로 시연합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-3" style="margin-bottom: 20px;">
+            <div class="panel">
+              <div class="mono text-emerald" style="font-size: 12px; margin-bottom: 6px;">DEMO 01 · Case 1</div>
+              <div class="panel-title">정상 승인 (처리위탁 특례)</div>
+              <p class="panel-desc" style="margin-bottom: 12px;">
+                KR AI SaaS + AWS 서울 + OpenAI(ZDR·마스킹) + 비PII Toss Payments
+              </p>
+              <div class="mono text-emerald" style="font-size: 13px; font-weight: 600;">Verdict: APPROVED · 100%</div>
+              <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 6px;">
+                오탐 방지(비PII 제외) 및 제28조의8 제1항 제3호 특례 정상 통과 확인
+              </p>
+            </div>
+
+            <div class="panel">
+              <div class="mono text-amber" style="font-size: 12px; margin-bottom: 6px;">DEMO 02 · Case 2</div>
+              <div class="panel-title">위조 여권 (Policy-Infra Drift)</div>
+              <p class="panel-desc" style="margin-bottom: 12px;">
+                방침 "국내 단독 보관" 선언 ↔ OpenAI · Stripe · Mixpanel + AWS 도쿄(JP)
+              </p>
+              <div class="mono text-amber" style="font-size: 13px; font-weight: 600;">Verdict: DRIFT_DETECTED</div>
+              <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 6px;">
+                Geo-Arc 차단 아크, Drift 대조 카드, 치유 적용 시 100% 미리보기 토글 시연
+              </p>
+            </div>
+
+            <div class="panel">
+              <div class="mono text-rose" style="font-size: 12px; margin-bottom: 6px;">DEMO 03 · Case 3</div>
+              <div class="panel-title">가상 국외 이전 &amp; 다중 충돌</div>
+              <p class="panel-desc" style="margin-bottom: 12px;">
+                AI 헬스케어 + EU 고객 + 해외 본사 IAM/KMS 원격 접근 + 암호화 OFF
+              </p>
+              <div class="mono text-rose" style="font-size: 13px; font-weight: 600;">Verdict: DENIED (Multi-Layer)</div>
+              <p style="font-size: 12.5px; color: var(--text-muted); margin-top: 6px;">
+                PIPA · GDPR · CLOUD Act · AI Act 동시 적발 및 Dual Remediation 확인
+              </p>
+            </div>
+          </div>
+
+          <div class="panel" style="padding: 16px 24px; display: flex; align-items: center; justify-content: space-between;">
+            <div>
+              <div style="font-size: 14px; font-weight: 600; color: var(--text-primary);">
+                보너스 실시간 조작 시연: Case 1에서 사업자를 JP(일본)로 바꾸고 AWS 서울 유지 시
+              </div>
+              <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">
+                즉시 JP_APPI가 자동 활성화되며, 처리방침에 누락된 KR(서울) 저장 사실을 <span class="mono text-rose">UNDISCLOSED_COUNTRY</span>로 실시간 적발
+              </div>
+            </div>
+            <a href="/" class="btn-primary" style="flex-shrink: 0;">지금 앱으로 이동 →</a>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Live Demo Plan</span>
+          <span class="mono">10 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 11: VERIFICATION & QUALITY -->
+      <section class="slide" data-title="검증 결과 및 기술적 성과" data-time="0:40"
+        data-notes="개발 완성도와 검증 결과입니다. 핵심 규칙 엔진, 오탐 방지, 순수 가상 국외 이전, 미고지 수신국·수탁사 Drift 탐지, 의존성 다중 파일 스캐너, JSON 정책 팩 유효성 검사 등 총 14개의 자동화 회귀 테스트를 구축해 100% 통과했습니다. 또한 TypeScript 정적 타입 체크와 프로덕션 빌드를 무오류로 검증하여 실제 배포 가능한 완성도를 확보했습니다.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">11</span>
+            <span>·</span>
+            <span>Verification &amp; Quality</span>
+          </div>
+          <div class="mono">Automated Regression Suite</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">14종 핵심 회귀 테스트 전수 통과 및 프로덕션 품질 검증</h2>
+          <p class="slide-subtitle">
+            단순 프로토타입을 넘어 실제 엣지 케이스와 다국가 조합까지 자동 테스트로 검증했습니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-4" style="margin-bottom: 20px;">
+            <div class="panel">
+              <div class="kpi-value text-emerald">14 / 14</div>
+              <div class="kpi-label">자동화 회귀 테스트 통과율 100%</div>
+            </div>
+            <div class="panel">
+              <div class="kpi-value text-cyan">57 Rules</div>
+              <div class="kpi-label">8개 글로벌 법령 팩 결정론 규칙</div>
+            </div>
+            <div class="panel">
+              <div class="kpi-value">0 Errors</div>
+              <div class="kpi-label">TypeScript Strict &amp; Vite 빌드 무오류</div>
+            </div>
+            <div class="panel">
+              <div class="kpi-value text-amber">5 Types</div>
+              <div class="kpi-label">Policy-Infra Drift 전수 분류·한국어화</div>
+            </div>
+          </div>
+
+          <div class="panel" style="padding: 18px 24px;">
+            <div class="panel-title" style="margin-bottom: 12px;">주요 검증 완료 테스트 케이스</div>
+            <div class="grid-2" style="gap: 12px 28px;">
+              <ul class="clean-list" style="gap: 8px;">
+                <li><span class="mono text-emerald">PASS</span> Case 1~3 핵심 시나리오 판정 정확도 (APPROVED / DRIFT / DENIED)</li>
+                <li><span class="mono text-emerald">PASS</span> <span class="mono">includes_pii: false</span> 토글 시 비PII 벤더 오탐 제외</li>
+                <li><span class="mono text-emerald">PASS</span> 해외 벤더 없는 순수 가상 국외 이전(IAM/KMS) 탐지</li>
+                <li><span class="mono text-emerald">PASS</span> JP 사업자 + AWS 서울 + Case 1 방침 미고지 수신국·벤더 적발</li>
+              </ul>
+              <ul class="clean-list" style="gap: 8px;">
+                <li><span class="mono text-emerald">PASS</span> KR AI 기본법 제31조 AI 서비스·결과물 표시 독립 평가</li>
+                <li><span class="mono text-emerald">PASS</span> EU GDPR · EU AI Act · JP APPI · CN PIPL · CCPA 교차 평가</li>
+                <li><span class="mono text-emerald">PASS</span> <span class="mono">package.json</span> / <span class="mono">.env</span> 다중 파일 스캔 및 리전 추출</li>
+                <li><span class="mono text-emerald">PASS</span> 커스텀 PolicyPackV2 스키마 검증·버전 대체·백업 라운드트립</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Verification &amp; Quality</span>
+          <span class="mono">11 / 12</span>
+        </div>
+      </section>
+
+      <!-- SLIDE 12: IMPACT & ROADMAP -->
+      <section class="slide" data-title="기대 효과 · 향후 계획 & Q&A" data-time="0:30"
+        data-notes="마지막으로 기대 효과와 향후 확장 계획입니다. Border Checker v2.0을 통해 전담 법무팀이 없는 스타트업과 AI SaaS 팀도 코드 배포 시점에 글로벌 데이터 주권 리스크를 스스로 점검하고 즉각 치유할 수 있습니다. 향후에는 GitHub App PR 자동 코멘트 봇, Terraform·Kubernetes IaC 심층 분석, 그리고 국가별 정책 팩 커뮤니티 마켓플레이스로 확장할 계획입니다. 이상으로 발표를 마치겠습니다. 감사합니다. 질문 있으시면 말씀해 주세요.">
+        <div class="slide-meta">
+          <div class="slide-meta-left">
+            <span class="slide-index">12</span>
+            <span>·</span>
+            <span>Impact &amp; Roadmap</span>
+          </div>
+          <div class="mono">Thank You · Q&amp;A</div>
+        </div>
+
+        <div class="slide-header">
+          <h2 class="slide-title">기대 효과 및 향후 고도화 로드맵</h2>
+          <p class="slide-subtitle">
+            개발 속도를 늦추지 않으면서 글로벌 개인정보·AI 규제를 코드 수준에서 내재화(Compliance-as-Code)합니다.
+          </p>
+        </div>
+
+        <div class="slide-body">
+          <div class="grid-2" style="margin-bottom: 24px;">
+            <div class="panel">
+              <div class="mono text-emerald" style="font-size: 12px; margin-bottom: 8px;">EXPECTED IMPACT</div>
+              <div class="panel-title">실무적·산업적 기대 효과</div>
+              <ul class="clean-list" style="margin-top: 12px;">
+                <li><strong style="color: var(--text-primary);">규제 리스크 조기 차단</strong> — 출시 후 과징금·시정명령 대신 PR 단계에서 Drift 사전 검출</li>
+                <li><strong style="color: var(--text-primary);">법무-개발 커뮤니케이션 비용 절감</strong> — Dual Remediation으로 개정 조항과 코드 패치를 동시 제시</li>
+                <li><strong style="color: var(--text-primary);">글로벌 확장 장벽 완화</strong> — KR·EU·US·JP·CN 및 AI 기본법 대응을 단일 워크플로로 통합</li>
+              </ul>
+            </div>
+
+            <div class="panel">
+              <div class="mono text-cyan" style="font-size: 12px; margin-bottom: 8px;">FUTURE ROADMAP</div>
+              <div class="panel-title">향후 확장 계획</div>
+              <ul class="clean-list" style="margin-top: 12px;">
+                <li><strong style="color: var(--text-primary);">GitHub App 자동 PR 리뷰 봇</strong> — 코드 변경 Diff에서 신규 SDK 추가 시 자동 코멘트 게시</li>
+                <li><strong style="color: var(--text-primary);">IaC 심층 파서 확장</strong> — Terraform HCL, Kubernetes Manifest, AWS IAM JSON 자동 정적 분석</li>
+                <li><strong style="color: var(--text-primary);">정책 팩 마켓플레이스</strong> — SG PDPA, UK GDPR, 브라질 LGPD 등 JSON 팩 생태계 확장</li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="panel" style="padding: 20px 28px; display: flex; align-items: center; justify-content: space-between; background: #0c0c10;">
+            <div>
+              <div style="font-family: var(--font-display); font-size: 22px; font-weight: 700; color: var(--text-primary);">
+                경청해 주셔서 감사합니다. — Q&amp;A
+              </div>
+              <div style="font-size: 13.5px; color: var(--text-secondary); margin-top: 4px;">
+                Border Checker v2.0 · AI-Native Data Sovereignty &amp; Policy-Infra Drift Linter
+              </div>
+            </div>
+            <a href="/" class="btn-subtle">실시간 데모 화면 열기</a>
+          </div>
+        </div>
+
+        <div class="slide-footer">
+          <span>Border Checker v2.0 · Capstone Design</span>
+          <span class="mono">12 / 12</span>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- Presenter Notes Drawer -->
+  <aside class="notes-drawer" id="notesDrawer" aria-live="polite">
+    <div class="notes-header">
+      <span id="notesMeta">발표 대본 · 슬라이드 01</span>
+      <button type="button" id="btnCloseNotes" class="btn-subtle" style="padding: 4px 10px; font-size: 11px;">닫기 (N)</button>
+    </div>
+    <p class="notes-text" id="notesText"></p>
+  </aside>
+
+  <!-- Overview Grid Modal -->
+  <div class="overview-modal" id="overviewModal" role="dialog" aria-label="전체 슬라이드 목차">
+    <div style="max-width: 1200px; margin: 0 auto 18px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="font-size: 16px; font-weight: 700;">전체 슬라이드 목차 (12장)</div>
+      <button type="button" id="btnCloseOverview" class="btn-subtle">닫기 (Esc)</button>
+    </div>
+    <div class="overview-grid" id="overviewGrid"></div>
+  </div>
+
+  <!-- Bottom Control Bar -->
+  <footer class="deck-bottombar">
+    <div style="font-size: 12px; color: var(--text-secondary);" id="bottomTitle">01. 표지 · Border Checker v2.0</div>
+    <div class="progress-track" aria-hidden="true">
+      <div class="progress-fill" id="progressFill" style="width: 8.33%;"></div>
+    </div>
+    <div class="nav-arrows">
+      <button type="button" class="btn-subtle" id="btnPrev">← 이전</button>
+      <button type="button" class="btn-subtle" id="btnNext">다음 →</button>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      const slides = Array.from(document.querySelectorAll('.slide'));
+      const total = slides.length;
+      let current = 0;
+
+      const stageViewport = document.getElementById('stageViewport');
+      const slideFrame = document.getElementById('slideFrame');
+      const slideCounter = document.getElementById('slideCounter');
+      const bottomTitle = document.getElementById('bottomTitle');
+      const progressFill = document.getElementById('progressFill');
+      const notesDrawer = document.getElementById('notesDrawer');
+      const notesMeta = document.getElementById('notesMeta');
+      const notesText = document.getElementById('notesText');
+      const overviewModal = document.getElementById('overviewModal');
+      const overviewGrid = document.getElementById('overviewGrid');
+      const btnNotes = document.getElementById('btnNotes');
+      const btnOverview = document.getElementById('btnOverview');
+
+      function pad(n) {
+        return String(n).padStart(2, '0');
+      }
+
+      function scaleStage() {
+        const vw = stageViewport.clientWidth - 48;
+        const vh = stageViewport.clientHeight - 32;
+        const scale = Math.min(vw / 1280, vh / 720, 1.15);
+        slideFrame.style.transform = 'scale(' + Math.max(scale, 0.35) + ')';
+      }
+
+      function renderOverview() {
+        overviewGrid.innerHTML = '';
+        slides.forEach(function (s, idx) {
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.className = 'overview-item' + (idx === current ? ' current' : '');
+          item.innerHTML =
+            '<div class="overview-num">' + pad(idx + 1) + ' / ' + pad(total) + ' · ' + (s.dataset.time || '') + '</div>' +
+            '<div class="overview-title">' + (s.dataset.title || '') + '</div>';
+          item.addEventListener('click', function () {
+            goTo(idx);
+            toggleOverview(false);
+          });
+          overviewGrid.appendChild(item);
+        });
+      }
+
+      function goTo(index) {
+        if (index < 0) index = 0;
+        if (index >= total) index = total - 1;
+        slides[current].classList.remove('active');
+        current = index;
+        slides[current].classList.add('active');
+
+        const activeSlide = slides[current];
+        slideCounter.textContent = pad(current + 1) + ' / ' + pad(total);
+        bottomTitle.textContent = pad(current + 1) + '. ' + (activeSlide.dataset.title || '');
+        progressFill.style.width = ((current + 1) / total) * 100 + '%';
+        notesMeta.textContent =
+          '발표 대본 · 슬라이드 ' + pad(current + 1) + ' (권장 시간 ' + (activeSlide.dataset.time || '0:40') + ')';
+        notesText.textContent = activeSlide.dataset.notes || '';
+
+        if (overviewModal.classList.contains('open')) {
+          renderOverview();
+        }
+      }
+
+      function toggleNotes(force) {
+        const next = typeof force === 'boolean' ? force : !notesDrawer.classList.contains('open');
+        notesDrawer.classList.toggle('open', next);
+        btnNotes.setAttribute('aria-pressed', String(next));
+      }
+
+      function toggleOverview(force) {
+        const next = typeof force === 'boolean' ? force : !overviewModal.classList.contains('open');
+        overviewModal.classList.toggle('open', next);
+        btnOverview.setAttribute('aria-pressed', String(next));
+        if (next) renderOverview();
+      }
+
+      document.getElementById('btnPrev').addEventListener('click', function () { goTo(current - 1); });
+      document.getElementById('btnNext').addEventListener('click', function () { goTo(current + 1); });
+      btnNotes.addEventListener('click', function () { toggleNotes(); });
+      document.getElementById('btnCloseNotes').addEventListener('click', function () { toggleNotes(false); });
+      btnOverview.addEventListener('click', function () { toggleOverview(); });
+      document.getElementById('btnCloseOverview').addEventListener('click', function () { toggleOverview(false); });
+      document.getElementById('btnPrint').addEventListener('click', function () { window.print(); });
+      document.getElementById('btnFullscreen').addEventListener('click', function () {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen && document.exitFullscreen();
+        }
+      });
+
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'ArrowRight' || e.key === 'PageDown' || (e.key === ' ' && !overviewModal.classList.contains('open'))) {
+          e.preventDefault();
+          goTo(current + 1);
+        } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+          e.preventDefault();
+          goTo(current - 1);
+        } else if (e.key === 'Home') {
+          goTo(0);
+        } else if (e.key === 'End') {
+          goTo(total - 1);
+        } else if (e.key === 'n' || e.key === 'N') {
+          toggleNotes();
+        } else if (e.key === 'g' || e.key === 'G') {
+          toggleOverview();
+        } else if (e.key === 'f' || e.key === 'F') {
+          if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+          } else {
+            document.exitFullscreen && document.exitFullscreen();
+          }
+        } else if (e.key === 'Escape') {
+          toggleOverview(false);
+          toggleNotes(false);
+        }
+      });
+
+      window.addEventListener('resize', scaleStage);
+      scaleStage();
+      goTo(0);
+    })();
+  </script>
+</body>
+</html>
