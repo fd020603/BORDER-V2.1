@@ -144,6 +144,7 @@
             "any": [
               { "fact": "legal_doc.disclosed_countries", "operator": "is_empty", "value": true },
               { "fact": "legal_doc.disclosed_vendors", "operator": "is_empty", "value": true },
+              { "fact": "derived.has_undisclosed_vendor", "operator": "equals", "value": true },
               { "fact": "legal_doc.disclosed_retention_period", "operator": "equals", "value": false },
               { "fact": "legal_doc.has_scc_or_safeguard_notice", "operator": "equals", "value": false }
             ]
@@ -361,6 +362,37 @@
       "remediation": {
         "legal_template": "당사는 GDPR 제25조 및 제32조에 따라 개인정보의 기밀성·무결성·가용성을 보장하기 위해 전송 구간 암호화(TLS 1.2 이상), 저장 데이터 암호화(AES-256/KMS), 최소 권한 접근 통제 등 적절한 기술적·관리적 보호조치를 적용하고 있습니다. [입력 필요: 추가 보안 인증 내역]",
         "infra_patch_hint": "모든 외부 API 통신에 HTTPS/TLS 1.2+를 강제하고, DB·스토리지 버킷(S3, RDS 등)의 저장 시 암호화(AES-256 또는 KMS CMK) 및 퍼블릭 액세스 차단을 활성화하세요."
+      }
+    },
+    {
+      "rule_id": "EU-GDPR-13-UNDISCLOSED-COUNTRY",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "GDPR Art. 13(1)(f), Art. 14(1)(f), Art. 44",
+      "plain_title": "실제 제3국 이전 리전 대비 처리방침 이전 국가 고지 누락(미공개 이전국) 탐지",
+      "plain_explanation": "인프라 리전 또는 외부 벤더를 통해 데이터가 전송되는 국가가 개인정보 처리방침에 고지된 이전 국가 목록에서 누락되어 GDPR 제13조·제14조 투명성 의무 위반이 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+          { "fact": "derived.has_undisclosed_destination_country", "operator": "equals", "value": true }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "drift_type": "UNDISCLOSED_COUNTRY",
+        "fact_path": "derived.undisclosed_destination_countries",
+        "doc_claim_path": "legal_doc.disclosed_countries",
+        "condition": {
+          "all": [
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+            { "fact": "derived.has_undisclosed_destination_country", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 감지: 실제 인프라·외부 벤더가 개인정보를 전송·보관하는 국가가 처리방침의 제3국 이전 국가 목록에 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "당사는 서비스 운영을 위해 귀하의 개인정보를 [입력 필요: 누락된 제3국 국가 목록]으로 이전하며, 해당 국가에 대한 적정성 결정 또는 GDPR 제46조 표준계약조항(SCC) 등 보호조치를 적용합니다.",
+        "infra_patch_hint": "모든 활성 클라우드 리전 및 외부 벤더 저장 국가가 처리방침에 빠짐없이 기재되도록 문서와 인프라를 동기화하세요."
       }
     }
   ]

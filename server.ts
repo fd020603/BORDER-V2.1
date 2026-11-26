@@ -13,7 +13,10 @@ import {
   STACK_BUILDER_REGIONS,
   scanDependencyFile,
 } from './lib/dependency-scanner';
-import { extractHeuristicPayload } from './lib/llm-parser';
+import {
+  extractHeuristicPayload,
+  parseJsonWithRepair,
+} from './lib/llm-parser';
 import {
   computeEffectiveHasCrossBorder,
   evaluateFacts,
@@ -31,19 +34,76 @@ const MAX_POLICY_CHARS = 100_000;
 const MAX_INFRA_CHARS = 100_000;
 const MAX_VENDOR_NAMES = 100;
 
+const PLACEHOLDER_SECRETS = new Set([
+  'MY_GEMINI_API_KEY',
+  'YOUR_GEMINI_API_KEY',
+  'YOUR_OPENAI_API_KEY',
+  'YOUR_ANTHROPIC_API_KEY',
+  'YOUR_OPENROUTER_API_KEY',
+  'YOUR_API_KEY',
+]);
+
+function isConfiguredSecret(value?: string): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && !PLACEHOLDER_SECRETS.has(trimmed);
+}
+
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim().length === 0) {
+  if (!isConfiguredSecret(apiKey)) {
     return null;
   }
   return new GoogleGenAI({
-    apiKey,
+    apiKey: apiKey!.trim(),
     httpOptions: {
       headers: {
         'User-Agent': 'aistudio-build',
       },
     },
   });
+}
+
+type CloudLlmProvider =
+  | 'GEMINI_CLOUD'
+  | 'OPENAI_CLOUD'
+  | 'ANTHROPIC_CLOUD'
+  | 'OPENROUTER_CLOUD'
+  | 'CUSTOM_CLOUD';
+
+const CLOUD_DEFAULT_MODELS: Record<CloudLlmProvider, string> = {
+  GEMINI_CLOUD: 'gemini-4-hydrogen',
+  OPENAI_CLOUD: 'gpt-4o-mini',
+  ANTHROPIC_CLOUD: 'claude-3-5-haiku-latest',
+  OPENROUTER_CLOUD: 'openai/gpt-4o-mini',
+  CUSTOM_CLOUD: 'gpt-4o-mini',
+};
+
+function sanitizeCloudModelName(
+  provider: CloudLlmProvider,
+  rawModel?: string,
+): string {
+  const trimmed = (rawModel ?? '').trim();
+  if (/^[a-zA-Z0-9._:/-]{2,120}$/.test(trimmed)) {
+    return trimmed;
+  }
+  return CLOUD_DEFAULT_MODELS[provider];
+}
+
+function normalizeCustomChatUrl(rawUrl: string): URL {
+  const parsed = new URL(rawUrl.trim());
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error('CUSTOM_LLM_BASE_URL must use http:// or https://');
+  }
+  const cleanPath = parsed.pathname.replace(/\/+$/, '');
+  if (!cleanPath || cleanPath === '') {
+    parsed.pathname = '/v1/chat/completions';
+  } else if (cleanPath.endsWith('/v1')) {
+    parsed.pathname = `${cleanPath}/chat/completions`;
+  } else if (!cleanPath.endsWith('/chat/completions')) {
+    parsed.pathname = `${cleanPath}/chat/completions`;
+  }
+  return parsed;
 }
 
 const DEFAULT_ALLOWED_LLM_HOSTS = new Set([
@@ -164,6 +224,15 @@ async function startServer() {
     res.json({
       ok: true,
       geminiConfigured,
+      providers: {
+        GEMINI_CLOUD: geminiConfigured,
+        OPENAI_CLOUD: isConfiguredSecret(process.env.OPENAI_API_KEY),
+        ANTHROPIC_CLOUD: isConfiguredSecret(process.env.ANTHROPIC_API_KEY),
+        OPENROUTER_CLOUD: isConfiguredSecret(process.env.OPENROUTER_API_KEY),
+        CUSTOM_CLOUD:
+          isConfiguredSecret(process.env.CUSTOM_LLM_BASE_URL) &&
+          isConfiguredSecret(process.env.CUSTOM_LLM_API_KEY),
+      },
       defaultModel: 'gemini-4-hydrogen',
     });
   });
@@ -345,24 +414,38 @@ async function startServer() {
   });
 
   app.post('/api/parse-facts', apiRateLimiter, async (req, res) => {
-    const ai = getGeminiClient();
-    if (!ai) {
-      res.status(503).json({
-        error: 'GEMINI_API_KEY is not configured on the server.',
-        code: 'MISSING_SERVER_KEY',
-      });
-      return;
-    }
+    const {
+      provider: rawProvider = 'GEMINI_CLOUD',
+      policyText = '',
+      infraCode = '',
+      vendorNames = [],
+      modelName = '',
+    } = (req.body ?? {}) as {
+      provider?: string;
+      policyText?: string;
+      infraCode?: string;
+      vendorNames?: string[];
+      modelName?: string;
+    };
 
-    const { policyText = '', infraCode = '', vendorNames = [], modelName = 'gemini-4-hydrogen' } =
-      (req.body ?? {}) as {
-        policyText?: string;
-        infraCode?: string;
-        vendorNames?: string[];
-        modelName?: string;
-      };
+    const validProviders: CloudLlmProvider[] = [
+      'GEMINI_CLOUD',
+      'OPENAI_CLOUD',
+      'ANTHROPIC_CLOUD',
+      'OPENROUTER_CLOUD',
+      'CUSTOM_CLOUD',
+    ];
+    const provider: CloudLlmProvider = validProviders.includes(
+      rawProvider as CloudLlmProvider,
+    )
+      ? (rawProvider as CloudLlmProvider)
+      : 'GEMINI_CLOUD';
 
-    if (typeof policyText !== 'string' || typeof infraCode !== 'string' || !Array.isArray(vendorNames)) {
+    if (
+      typeof policyText !== 'string' ||
+      typeof infraCode !== 'string' ||
+      !Array.isArray(vendorNames)
+    ) {
       res.status(400).json({
         error: 'Invalid request payload types.',
         code: 'INVALID_PAYLOAD',
@@ -376,16 +459,17 @@ async function startServer() {
       vendorNames.length > MAX_VENDOR_NAMES
     ) {
       res.status(413).json({
-        error: 'Input exceeds maximum allowed length (100,000 chars per field / 100 vendors).',
+        error:
+          'Input exceeds maximum allowed length (100,000 chars per field / 100 vendors).',
         code: 'PAYLOAD_TOO_LARGE',
       });
       return;
     }
 
-    const allowedModel =
-      modelName === 'gemini-3.1-flash-lite' || modelName === 'gemini-4-hydrogen'
-        ? modelName
-        : 'gemini-4-hydrogen';
+    const resolvedModel = sanitizeCloudModelName(provider, modelName);
+
+    const systemInstruction =
+      'You are a strict compliance fact extraction parser. Output ONLY valid JSON conforming to the schema. Never invent undisclosed vendors or countries.';
 
     const prompt = [
       'Analyze the provided Privacy Policy text and Infrastructure/Terraform/IAM code.',
@@ -411,6 +495,14 @@ async function startServer() {
       '- foreign_iam_access / foreign_kms_control: true if infra code grants remote/foreign IAM access or foreign KMS key control.',
       '- infra_countries: ISO 2-letter uppercase country codes from cloud regions in infraCode (e.g., us-east-1 -> US, ap-northeast-1 -> JP, ap-northeast-2 -> KR, eu-central-1 -> EU).',
       '',
+      'Required JSON shape:',
+      '{',
+      '  "legal_doc": { "exists": boolean, "claims_domestic_only": boolean, "has_separate_consent": boolean, "has_entrustment_disclosure": boolean, "disclosed_countries": string[], "disclosed_vendors": string[], "disclosed_items": string[], "disclosed_method_and_time": boolean, "disclosed_retention_period": boolean, "disclosed_opt_out_method": boolean, "disclosed_dest_country_law_info": boolean, "has_scc_or_safeguard_notice": boolean, "has_ai_training_opt_out_notice": boolean, "has_ai_service_notice": boolean, "has_ai_output_label_notice": boolean, "has_do_not_sell_or_share_notice": boolean },',
+      '  "security": { "encryption_in_transit": boolean, "encryption_at_rest": boolean, "pii_masked_before_transfer": boolean },',
+      '  "virtual_transfer": { "foreign_iam_access": boolean, "foreign_kms_control": boolean },',
+      '  "infra_countries": string[]',
+      '}',
+      '',
       `Detected SDK Vendors context: ${JSON.stringify(vendorNames)}`,
       '',
       '=== PRIVACY POLICY TEXT ===',
@@ -420,68 +512,239 @@ async function startServer() {
       infraCode || '(empty)',
     ].join('\n');
 
-    try {
-      const response = await ai.models.generateContent({
-        model: allowedModel,
-        contents: prompt,
-        config: {
-          systemInstruction:
-            'You are a strict compliance fact extraction parser. Output ONLY valid JSON conforming to the schema. Never invent undisclosed vendors or countries.',
-          responseMimeType: 'application/json',
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              legal_doc: {
-                type: Type.OBJECT,
-                properties: {
-                  exists: { type: Type.BOOLEAN },
-                  claims_domestic_only: { type: Type.BOOLEAN },
-                  has_separate_consent: { type: Type.BOOLEAN },
-                  has_entrustment_disclosure: { type: Type.BOOLEAN },
-                  disclosed_countries: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  disclosed_vendors: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  disclosed_items: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  disclosed_method_and_time: { type: Type.BOOLEAN },
-                  disclosed_retention_period: { type: Type.BOOLEAN },
-                  disclosed_opt_out_method: { type: Type.BOOLEAN },
-                  disclosed_dest_country_law_info: { type: Type.BOOLEAN },
-                  has_scc_or_safeguard_notice: { type: Type.BOOLEAN },
-                  has_ai_training_opt_out_notice: { type: Type.BOOLEAN },
-                  has_ai_service_notice: { type: Type.BOOLEAN },
-                  has_ai_output_label_notice: { type: Type.BOOLEAN },
-                  has_do_not_sell_or_share_notice: { type: Type.BOOLEAN },
+    if (provider === 'GEMINI_CLOUD') {
+      const ai = getGeminiClient();
+      if (!ai) {
+        res.status(503).json({
+          error: 'GEMINI_API_KEY is not configured on the server.',
+          code: 'MISSING_SERVER_KEY',
+        });
+        return;
+      }
+
+      try {
+        const response = await ai.models.generateContent({
+          model: resolvedModel,
+          contents: prompt,
+          config: {
+            systemInstruction,
+            responseMimeType: 'application/json',
+            responseSchema: {
+              type: Type.OBJECT,
+              properties: {
+                legal_doc: {
+                  type: Type.OBJECT,
+                  properties: {
+                    exists: { type: Type.BOOLEAN },
+                    claims_domestic_only: { type: Type.BOOLEAN },
+                    has_separate_consent: { type: Type.BOOLEAN },
+                    has_entrustment_disclosure: { type: Type.BOOLEAN },
+                    disclosed_countries: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    disclosed_vendors: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    disclosed_items: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    disclosed_method_and_time: { type: Type.BOOLEAN },
+                    disclosed_retention_period: { type: Type.BOOLEAN },
+                    disclosed_opt_out_method: { type: Type.BOOLEAN },
+                    disclosed_dest_country_law_info: { type: Type.BOOLEAN },
+                    has_scc_or_safeguard_notice: { type: Type.BOOLEAN },
+                    has_ai_training_opt_out_notice: { type: Type.BOOLEAN },
+                    has_ai_service_notice: { type: Type.BOOLEAN },
+                    has_ai_output_label_notice: { type: Type.BOOLEAN },
+                    has_do_not_sell_or_share_notice: { type: Type.BOOLEAN },
+                  },
                 },
-              },
-              security: {
-                type: Type.OBJECT,
-                properties: {
-                  encryption_in_transit: { type: Type.BOOLEAN },
-                  encryption_at_rest: { type: Type.BOOLEAN },
-                  pii_masked_before_transfer: { type: Type.BOOLEAN },
+                security: {
+                  type: Type.OBJECT,
+                  properties: {
+                    encryption_in_transit: { type: Type.BOOLEAN },
+                    encryption_at_rest: { type: Type.BOOLEAN },
+                    pii_masked_before_transfer: { type: Type.BOOLEAN },
+                  },
                 },
-              },
-              virtual_transfer: {
-                type: Type.OBJECT,
-                properties: {
-                  foreign_iam_access: { type: Type.BOOLEAN },
-                  foreign_kms_control: { type: Type.BOOLEAN },
+                virtual_transfer: {
+                  type: Type.OBJECT,
+                  properties: {
+                    foreign_iam_access: { type: Type.BOOLEAN },
+                    foreign_kms_control: { type: Type.BOOLEAN },
+                  },
                 },
-              },
-              infra_countries: {
-                type: Type.ARRAY,
-                items: { type: Type.STRING },
+                infra_countries: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
               },
             },
           },
+        });
+
+        const rawText = (response.text ?? '').trim();
+        const parsed = parseJsonWithRepair(rawText);
+        res.json({ parsed, provider, model: resolvedModel });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Gemini API error';
+        res.status(502).json({ error: message, code: 'UPSTREAM_GEMINI_ERROR' });
+      }
+      return;
+    }
+
+    if (provider === 'ANTHROPIC_CLOUD') {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (!isConfiguredSecret(apiKey)) {
+        res.status(503).json({
+          error: 'ANTHROPIC_API_KEY is not configured on the server.',
+          code: 'MISSING_SERVER_KEY',
+        });
+        return;
+      }
+
+      try {
+        const upstreamRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey!.trim(),
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: resolvedModel,
+            max_tokens: 4096,
+            temperature: 0.1,
+            system: systemInstruction,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+        });
+
+        if (!upstreamRes.ok) {
+          const errText = await upstreamRes.text().catch(() => '');
+          res.status(502).json({
+            error: `Anthropic HTTP ${upstreamRes.status}${errText ? `: ${errText.slice(0, 200)}` : ''}`,
+            code: 'UPSTREAM_ANTHROPIC_ERROR',
+          });
+          return;
+        }
+
+        const data = (await upstreamRes.json()) as {
+          content?: Array<{ type?: string; text?: string }>;
+        };
+        const rawText = (data.content ?? [])
+          .filter((c) => c.type === 'text' && typeof c.text === 'string')
+          .map((c) => c.text)
+          .join('\n')
+          .trim();
+
+        const parsed = parseJsonWithRepair(rawText);
+        res.json({ parsed, provider, model: resolvedModel });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Anthropic API error';
+        res.status(502).json({
+          error: message,
+          code: 'UPSTREAM_ANTHROPIC_ERROR',
+        });
+      }
+      return;
+    }
+
+    // OpenAI, OpenRouter, or Custom OpenAI-compatible Cloud Endpoint
+    let targetUrl: string;
+    let bearerKey: string | undefined;
+    const extraHeaders: Record<string, string> = {};
+
+    if (provider === 'OPENAI_CLOUD') {
+      bearerKey = process.env.OPENAI_API_KEY;
+      if (!isConfiguredSecret(bearerKey)) {
+        res.status(503).json({
+          error: 'OPENAI_API_KEY is not configured on the server.',
+          code: 'MISSING_SERVER_KEY',
+        });
+        return;
+      }
+      targetUrl = 'https://api.openai.com/v1/chat/completions';
+    } else if (provider === 'OPENROUTER_CLOUD') {
+      bearerKey = process.env.OPENROUTER_API_KEY;
+      if (!isConfiguredSecret(bearerKey)) {
+        res.status(503).json({
+          error: 'OPENROUTER_API_KEY is not configured on the server.',
+          code: 'MISSING_SERVER_KEY',
+        });
+        return;
+      }
+      targetUrl = 'https://openrouter.ai/api/v1/chat/completions';
+      extraHeaders['X-Title'] = 'Border Checker';
+    } else {
+      const baseUrl = process.env.CUSTOM_LLM_BASE_URL;
+      bearerKey = process.env.CUSTOM_LLM_API_KEY;
+      if (!isConfiguredSecret(baseUrl) || !isConfiguredSecret(bearerKey)) {
+        res.status(503).json({
+          error:
+            'CUSTOM_LLM_BASE_URL or CUSTOM_LLM_API_KEY is not configured on the server.',
+          code: 'MISSING_SERVER_KEY',
+        });
+        return;
+      }
+      try {
+        targetUrl = normalizeCustomChatUrl(baseUrl!).toString();
+      } catch (err) {
+        res.status(500).json({
+          error:
+            err instanceof Error
+              ? err.message
+              : 'Invalid CUSTOM_LLM_BASE_URL configuration.',
+          code: 'INVALID_CUSTOM_ENDPOINT',
+        });
+        return;
+      }
+    }
+
+    try {
+      const requestBody: Record<string, unknown> = {
+        model: resolvedModel,
+        temperature: 0.1,
+        max_tokens: 4096,
+        messages: [
+          { role: 'system', content: systemInstruction },
+          { role: 'user', content: prompt },
+        ],
+      };
+      if (provider === 'OPENAI_CLOUD') {
+        requestBody.response_format = { type: 'json_object' };
+      }
+
+      const upstreamRes = await fetch(targetUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${bearerKey!.trim()}`,
+          ...extraHeaders,
         },
+        body: JSON.stringify(requestBody),
       });
 
-      const rawText = (response.text ?? '').trim();
-      const parsed = JSON.parse(rawText);
-      res.json({ parsed, model: allowedModel });
+      if (!upstreamRes.ok) {
+        const errText = await upstreamRes.text().catch(() => '');
+        res.status(502).json({
+          error: `Upstream HTTP ${upstreamRes.status}${errText ? `: ${errText.slice(0, 200)}` : ''}`,
+          code: 'UPSTREAM_LLM_ERROR',
+        });
+        return;
+      }
+
+      const data = (await upstreamRes.json()) as {
+        choices?: Array<{
+          message?: { content?: string; reasoning_content?: string };
+        }>;
+      };
+      const rawText =
+        data.choices?.[0]?.message?.content ??
+        data.choices?.[0]?.message?.reasoning_content ??
+        '';
+      const parsed = parseJsonWithRepair(rawText);
+      res.json({ parsed, provider, model: resolvedModel });
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Gemini API error';
-      res.status(502).json({ error: message, code: 'UPSTREAM_GEMINI_ERROR' });
+      const message =
+        error instanceof Error ? error.message : 'Upstream LLM API error';
+      res.status(502).json({ error: message, code: 'UPSTREAM_LLM_ERROR' });
     }
   });
 

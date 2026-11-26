@@ -10,6 +10,10 @@ import type {
 
 export type ParserEngineUsed =
   | 'GEMINI_CLOUD'
+  | 'OPENAI_CLOUD'
+  | 'ANTHROPIC_CLOUD'
+  | 'OPENROUTER_CLOUD'
+  | 'CUSTOM_CLOUD'
   | 'LOCAL_OPENAI_COMPAT'
   | 'HEURISTIC_FALLBACK';
 
@@ -47,6 +51,7 @@ interface ExtractedLlmPayload {
 }
 
 const COUNTRY_KEYWORDS: Array<{ code: string; patterns: RegExp[] }> = [
+  { code: 'KR', patterns: [/\bKR\b/i, /대한민국/, /한국/, /서울/, /Seoul/i, /Korea/i] },
   { code: 'US', patterns: [/\bUS\b/i, /\bUSA\b/i, /미국/, /United States/i, /캘리포니아/i] },
   { code: 'JP', patterns: [/\bJP\b/i, /일본/, /도쿄/, /Tokyo/i, /Japan/i] },
   { code: 'EU', patterns: [/\bEU\b/i, /\bEEA\b/i, /유럽/, /독일/, /아일랜드/, /Frankfurt/i, /Dublin/i] },
@@ -275,7 +280,7 @@ export function validateExtractedPayload(data: unknown): ExtractedLlmPayload {
   return result;
 }
 
-function parseJsonWithRepair(raw: string): ExtractedLlmPayload {
+export function parseJsonWithRepair(raw: string): ExtractedLlmPayload {
   const cleaned = stripMarkdownAndThink(raw);
   let lastValidationError: Error | null = null;
 
@@ -352,7 +357,7 @@ export function extractHeuristicPayload(
     );
 
   const disclosedCountries: string[] = [];
-  if (exists) {
+  if (exists && !claimsDomesticOnly) {
     for (const item of COUNTRY_KEYWORDS) {
       if (item.patterns.some((p) => p.test(text))) {
         disclosedCountries.push(item.code);
@@ -1028,16 +1033,27 @@ export async function parseInputsToFacts(
     throw new LlmRequestCancelledError();
   }
 
-  if (llmConfig.provider === 'GEMINI_CLOUD') {
+  if (llmConfig.provider !== 'LOCAL_OPENAI_COMPAT') {
+    const cloudProviderLabels: Record<string, string> = {
+      GEMINI_CLOUD: 'Cloud Gemini',
+      OPENAI_CLOUD: 'Cloud OpenAI',
+      ANTHROPIC_CLOUD: 'Cloud Anthropic Claude',
+      OPENROUTER_CLOUD: 'Cloud OpenRouter',
+      CUSTOM_CLOUD: 'Custom Cloud LLM',
+    };
+    const providerLabel =
+      cloudProviderLabels[llmConfig.provider] ?? 'Cloud LLM';
+
     try {
       const response = await fetch('/api/parse-facts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          provider: llmConfig.provider,
           policyText: options.noPolicyDoc ? '' : policyText,
           infraCode,
           vendorNames: detectedVendors.map((v) => v.name),
-          modelName: llmConfig.modelName || 'gemini-4-hydrogen',
+          modelName: llmConfig.modelName,
         }),
         signal: options.signal,
       });
@@ -1053,7 +1069,7 @@ export async function parseInputsToFacts(
               detectedVendors,
               options,
             ),
-            engineUsed: 'GEMINI_CLOUD',
+            engineUsed: llmConfig.provider,
             attempts: 1,
             warnings,
             latencyMs: Math.round(performance.now() - startedAt),
@@ -1063,18 +1079,21 @@ export async function parseInputsToFacts(
 
       const errPayload = (await response.json().catch(() => ({}))) as {
         error?: string;
+        code?: string;
       };
       warnings.push(
-        errPayload.error
-          ? `Cloud Gemini 응답 불가(${errPayload.error}) — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
-          : 'Cloud Gemini 서버 키가 미설정되어 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.',
+        errPayload.code === 'MISSING_SERVER_KEY'
+          ? `${providerLabel} 서버 API 키가 미설정되어 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
+          : errPayload.error
+            ? `${providerLabel} 응답 불가(${errPayload.error}) — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`
+            : `${providerLabel} 서버 키가 미설정되어 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`,
       );
     } catch (err) {
       if (options.signal?.aborted || err instanceof LlmRequestCancelledError) {
         throw new LlmRequestCancelledError();
       }
       warnings.push(
-        'Cloud Gemini 엔드포인트 연결 실패 — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.',
+        `${providerLabel} 엔드포인트 연결 실패 — 내장 스마트 휴리스틱 파서로 자동 전환되었습니다.`,
       );
     }
   } else if (llmConfig.provider === 'LOCAL_OPENAI_COMPAT') {

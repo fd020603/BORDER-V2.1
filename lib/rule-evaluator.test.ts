@@ -531,8 +531,111 @@ runTest('13. storageRepository 워크스페이스 JSON 백업 내보내기/가�
   assertEqual(invalid.ok, false, 'Unsupported backup schema must be rejected');
 });
 
+runTest('14. 미고지 수신국(JP 사업자+AWS 서울+Case1 방침) 및 미고지 추가 벤더 Drift/Blocker 탐지 검증', () => {
+  const case1Facts = cloneFacts(DEMO_SCENARIOS[0].facts);
+  const jpKrScenarioFacts: CanonicalFactModel = {
+    ...case1Facts,
+    workspace: {
+      business_country: 'JP',
+      data_subject_countries: ['KR', 'GB'],
+      industry_domain: 'AI_SAAS',
+    },
+    transfers: {
+      ...case1Facts.transfers,
+      has_cross_border: true,
+      destination_countries: ['KR', 'US'],
+      infra_countries: ['KR'],
+    },
+  };
+
+  const blockedRes = evaluateFacts(jpKrScenarioFacts, DEFAULT_POLICY_PACKS);
+  assert(
+    blockedRes.verdict !== 'APPROVED',
+    'JP business with undisclosed KR storage and KR/GB subjects must NOT be APPROVED',
+  );
+  assertEqual(
+    blockedRes.verdict,
+    'DRIFT_DETECTED',
+    'Undisclosed destination country with Policy-Infra Drift must result in DRIFT_DETECTED verdict',
+  );
+  assert(
+    blockedRes.stats.blocker_count >= 2,
+    'Undisclosed KR destination must trigger BLOCKERs in KR_PIPA and JP_APPI',
+  );
+  assert(
+    blockedRes.stats.drift_count > 0,
+    'Undisclosed KR destination must record Policy-Infra Drift',
+  );
+  assert(
+    blockedRes.stats.pass_rate_percent < 100,
+    'Pass rate percent must drop below 100 when undisclosed destination country exists',
+  );
+  assert(
+    blockedRes.triggered_rules.some((r) => r.rule_id === 'KR-PIPA-28-8-UNDISCLOSED-DEST'),
+    'KR-PIPA-28-8-UNDISCLOSED-DEST must trigger',
+  );
+  assert(
+    blockedRes.triggered_rules.some((r) => r.rule_id === 'JP-APPI-28-UNDISCLOSED-COUNTRY'),
+    'JP-APPI-28-UNDISCLOSED-COUNTRY must trigger',
+  );
+
+  // Verify heuristic parser detects KR when privacy policy mentions 한국/서울
+  const krHeuristic = extractHeuristicPayload(
+    '당사는 한국(서울) 리전 서버와 미국 OpenAI LLC에 데이터를 보관·처리합니다.',
+    '',
+    [],
+    false,
+  );
+  assert(
+    krHeuristic.legal_doc?.disclosed_countries?.includes('KR') &&
+      krHeuristic.legal_doc?.disclosed_countries?.includes('US'),
+    'Heuristic parser must detect both KR and US in disclosed_countries',
+  );
+
+  // When KR and JP are both disclosed alongside US, undisclosed destination rules clear
+  const disclosedKrFacts = cloneFacts(jpKrScenarioFacts);
+  disclosedKrFacts.legal_doc.disclosed_countries = ['US', 'KR', 'JP'];
+  const clearedDestRes = evaluateFacts(disclosedKrFacts, DEFAULT_POLICY_PACKS);
+  assert(
+    !clearedDestRes.triggered_rules.some(
+      (r) =>
+        r.rule_id === 'KR-PIPA-28-8-UNDISCLOSED-DEST' ||
+        r.rule_id === 'JP-APPI-28-UNDISCLOSED-COUNTRY',
+    ),
+    'Undisclosed destination country rules must clear once US, KR, and JP are disclosed',
+  );
+
+  // Extra undisclosed active PII vendor alongside disclosed OpenAI LLC must trigger UNDISCLOSED_VENDOR drift
+  const extraVendorFacts = cloneFacts(DEMO_SCENARIOS[0].facts);
+  extraVendorFacts.transfers.detected_vendors.push({
+    name: 'Stripe, Inc.',
+    sdk: 'stripe',
+    country: 'US',
+    default_country: 'US',
+    data_residency_country: 'US',
+    transfer_purpose: 'ENTRUSTMENT',
+    includes_pii: true,
+    dpf_certified: true,
+    baa_supported: false,
+    zero_data_retention: false,
+    category: 'PAYMENT',
+  });
+  const vendorDriftRes = evaluateFacts(extraVendorFacts, DEFAULT_POLICY_PACKS);
+  assert(
+    vendorDriftRes.triggered_rules.some(
+      (r) => r.rule_id === 'KR-PIPA-26-2-ENTRUSTMENT-LIST',
+    ),
+    'Undisclosed extra PII vendor must trigger KR-PIPA-26-2-ENTRUSTMENT-LIST',
+  );
+  assert(
+    vendorDriftRes.detected_drifts.some((d) => d.drift_type === 'UNDISCLOSED_VENDOR'),
+    'Undisclosed extra PII vendor must emit UNDISCLOSED_VENDOR drift',
+  );
+});
+
 console.log(`\nSummary: ${passed} passed, ${failed} failed`);
 if (failed > 0) {
   throw new Error(`${failed} test(s) failed`);
 }
+
 

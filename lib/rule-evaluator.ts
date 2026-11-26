@@ -24,6 +24,10 @@ interface DerivedFacts {
   active_vendor_sdks: string[];
   active_transfer_purposes: TransferPurpose[];
   active_non_adequate_eu_countries: string[];
+  undisclosed_destination_countries: string[];
+  has_undisclosed_destination_country: boolean;
+  undisclosed_vendors: string[];
+  has_undisclosed_vendor: boolean;
   has_generative_ai_sdk: boolean;
   has_any_virtual_transfer: boolean;
   has_non_zdr_ai_vendor: boolean;
@@ -42,6 +46,38 @@ const EU_ADEQUACY_DEFAULT = new Set(['EU', 'KR', 'JP', 'GB', 'CH', 'CA']);
 
 function uniqueStrings(items: string[]): string[] {
   return Array.from(new Set(items.filter((item) => item.trim().length > 0)));
+}
+
+function normalizeVendorToken(name: string): string {
+  return name.trim().toLowerCase().replace(/[^a-z0-9가-힣]+/g, ' ').trim();
+}
+
+function isVendorDisclosed(
+  vendor: DetectedVendor,
+  disclosedVendors: string[],
+): boolean {
+  if (disclosedVendors.length === 0) return false;
+  const vendorTokens = new Set(
+    [vendor.name, vendor.sdk, vendor.name.split(/[,\s(]/)[0]]
+      .map(normalizeVendorToken)
+      .filter((t) => t.length >= 2),
+  );
+  return disclosedVendors.some((rawDisclosed) => {
+    const disclosedNorm = normalizeVendorToken(rawDisclosed);
+    if (!disclosedNorm) return false;
+    const disclosedShort = normalizeVendorToken(rawDisclosed.split(/[,\s(]/)[0]);
+    for (const token of vendorTokens) {
+      if (
+        disclosedNorm === token ||
+        disclosedShort === token ||
+        disclosedNorm.includes(token) ||
+        token.includes(disclosedNorm)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  });
 }
 
 export function normalizeVendor(vendor: DetectedVendor): DetectedVendor {
@@ -106,11 +142,19 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
 
   const businessCountry = facts.workspace.business_country.toUpperCase();
 
+  const infraCountries = uniqueStrings(
+    (facts.transfers.infra_countries ?? [])
+      .map((c) => c.toUpperCase())
+      .filter((c) => c !== businessCountry),
+  );
+  const infraCountriesSet = new Set(infraCountries);
+
   const excludedOnlyCountries = new Set(
     excludedNonPiiVendors
       .map((v) => v.data_residency_country.toUpperCase())
       .filter(
         (country) =>
+          !infraCountriesSet.has(country) &&
           !activeVendors.some(
             (av) => av.data_residency_country.toUpperCase() === country,
           ),
@@ -124,6 +168,7 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
       .filter(
         (defaultCountry) =>
           defaultCountry !== businessCountry &&
+          !infraCountriesSet.has(defaultCountry) &&
           !activeVendors.some(
             (av) => av.data_residency_country.toUpperCase() === defaultCountry,
           ),
@@ -131,6 +176,7 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
   );
 
   const effectiveDestinationCountries = uniqueStrings([
+    ...infraCountries,
     ...facts.transfers.destination_countries
       .map((c) => c.toUpperCase())
       .filter(
@@ -185,6 +231,23 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
       v.zero_data_retention === false,
   );
 
+  const disclosedCountriesSet = new Set(
+    (facts.legal_doc.disclosed_countries ?? []).map((c) => c.trim().toUpperCase()),
+  );
+  const undisclosedDestinationCountries = effectiveDestinationCountries.filter(
+    (country) => !disclosedCountriesSet.has(country.toUpperCase()),
+  );
+  const hasUndisclosedDestinationCountry =
+    undisclosedDestinationCountries.length > 0;
+
+  const disclosedVendorsList = facts.legal_doc.disclosed_vendors ?? [];
+  const undisclosedVendors = uniqueStrings(
+    activeVendors
+      .filter((vendor) => !isVendorDisclosed(vendor, disclosedVendorsList))
+      .map((vendor) => vendor.name),
+  );
+  const hasUndisclosedVendor = undisclosedVendors.length > 0;
+
   const usFisaExposure =
     effectiveDestinationCountries.includes('US') ||
     facts.transfers.virtual_transfer.foreign_iam_access ||
@@ -228,6 +291,10 @@ export function buildEvaluationContext(facts: CanonicalFactModel): {
       active_vendor_sdks: uniqueStrings(activeVendors.map((v) => v.sdk)),
       active_transfer_purposes: activePurposes,
       active_non_adequate_eu_countries: activeNonAdequateEuCountries,
+      undisclosed_destination_countries: undisclosedDestinationCountries,
+      has_undisclosed_destination_country: hasUndisclosedDestinationCountry,
+      undisclosed_vendors: undisclosedVendors,
+      has_undisclosed_vendor: hasUndisclosedVendor,
       has_generative_ai_sdk: hasGenerativeAiSdk,
       has_any_virtual_transfer: hasVirtualTransfer,
       has_non_zdr_ai_vendor: hasNonZdrAiVendor,
@@ -678,12 +745,16 @@ function inferDriftMetadata(
       driftType = 'VIRTUAL_TRANSFER_OMISSION';
     } else if (
       hasFact('legal_doc.disclosed_vendors') ||
-      hasFact('derived.active_vendor_names')
+      hasFact('derived.active_vendor_names') ||
+      hasFact('derived.has_undisclosed_vendor') ||
+      hasFact('derived.undisclosed_vendors')
     ) {
       driftType = 'UNDISCLOSED_VENDOR';
     } else if (
       hasFact('legal_doc.disclosed_countries') ||
-      hasFact('transfers.destination_countries')
+      hasFact('transfers.destination_countries') ||
+      hasFact('derived.has_undisclosed_destination_country') ||
+      hasFact('derived.undisclosed_destination_countries')
     ) {
       driftType = 'UNDISCLOSED_COUNTRY';
     } else {

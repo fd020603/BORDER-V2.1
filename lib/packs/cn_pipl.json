@@ -69,7 +69,12 @@
                 "operator": "any_vendor_matches",
                 "value": { "includes_pii": true, "transfer_purpose": "ENTRUSTMENT" }
               },
-              { "fact": "legal_doc.has_entrustment_disclosure", "operator": "equals", "value": false }
+              {
+                "any": [
+                  { "fact": "legal_doc.has_entrustment_disclosure", "operator": "equals", "value": false },
+                  { "fact": "derived.has_undisclosed_vendor", "operator": "equals", "value": true }
+                ]
+              }
             ]
           }
         ]
@@ -234,6 +239,37 @@
       "remediation": {
         "legal_template": "[KO] 당사는 개인정보의 안전한 처리를 위해 전송 구간 암호화(TLS), 저장 데이터 암호화(AES-256 등), 및 비식별화(De-identification) 조치를 포함한 기술적 보호조치를 적용하고 있습니다.\n[EN] We implement technical security measures including encryption in transit (TLS), encryption at rest (e.g., AES-256), and de-identification to prevent unauthorized access, breach, tampering, or loss of personal information.",
         "infra_patch_hint": "모든 외부·내부 통신에 TLS 1.2+를 강제하고, 스토리지/DB의 저장 시 암호화(Encryption at Rest)를 활성화하며, 필요 시 국외 전송 페이로드에 PII 비식별화 필터를 적용하세요."
+      }
+    },
+    {
+      "rule_id": "CN-PIPL-39-UNDISCLOSED-COUNTRY",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "PIPL Art. 39",
+      "plain_title": "실제 국외 이전 국가 대비 처리방침 수신국 고지 누락(미공개 이전국) 탐지",
+      "plain_explanation": "인프라 리전 또는 외부 벤더를 통해 데이터가 전송되는 국가가 처리방침의 국외 이전 대상 국가 목록에 기재되어 있지 않아 PIPL 제39조 사전 고지 의무 위반이 탐지되었습니다.",
+      "condition_dsl": {
+        "all": [
+          { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+          { "fact": "derived.has_undisclosed_destination_country", "operator": "equals", "value": true }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "drift_type": "UNDISCLOSED_COUNTRY",
+        "fact_path": "derived.undisclosed_destination_countries",
+        "doc_claim_path": "legal_doc.disclosed_countries",
+        "condition": {
+          "all": [
+            { "fact": "transfers.has_cross_border", "operator": "equals", "value": true },
+            { "fact": "derived.has_undisclosed_destination_country", "operator": "equals", "value": true }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift: 실제 인프라·외부 벤더가 개인정보를 전송하는 국가가 처리방침의 국외 이전 대상 국가 목록에 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[KO] 당사는 국외 이전이 발생하는 모든 실제 국가([입력 필요: 누락된 국가명 일체]) 및 수령인 정보를 개인정보 처리방침에 명확히 고지하고 별도 동의를 받습니다.\n[EN] We clearly disclose all actual overseas destination countries ([입력 필요: missing countries]) and recipient details in our privacy policy and obtain separate consent.",
+        "infra_patch_hint": "활성 클라우드 리전 및 외부 벤더의 실제 저장 국가가 처리방침에 모두 반영되도록 동기화하세요."
       }
     }
   ]

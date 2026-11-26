@@ -442,20 +442,20 @@ export function CicdGateTab({
   return (
     <div className="space-y-6">
       {/* PR Preset Selector Header */}
-      <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      <section className="rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <GitPullRequest className="w-5 h-5 text-sky-400" />
-            <h2 className="font-display text-base font-semibold text-slate-100">
+            <GitPullRequest className="w-5 h-5 text-cyan-400" />
+            <h2 className="font-display text-base font-semibold text-zinc-100">
               Shift-Left CI/CD 배포 게이트 시뮬레이터 (GitHub Pull Request)
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1">
             배포 이후 탐지가 아닌 PR 머지 직전 단계에서 `evaluateFacts()` 엔진이 코드·인프라 변경분을 검증하고 무단 반출을 차단합니다.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-lg bg-[#08080A] border border-white/[0.07] shrink-0">
           {allPrOptions.map((pr) => {
             const active = pr.id === selectedPr.id;
             return (
@@ -463,10 +463,10 @@ export function CicdGateTab({
                 key={pr.id}
                 type="button"
                 onClick={() => handleSelectPr(pr.id)}
-                className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${
                   active
-                    ? 'bg-sky-500 border-sky-400 text-slate-950 font-semibold'
-                    : 'bg-[#060913] border-slate-800 text-slate-300 hover:border-slate-700'
+                    ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#050507] font-semibold'
+                    : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
                 }`}
               >
                 {pr.shortLabel}
@@ -479,10 +479,10 @@ export function CicdGateTab({
       {/* GitHub PR Main Split View */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left: PR Metadata & Git Diff Viewer */}
-        <section className="lg:col-span-7 rounded-xl border border-slate-800 bg-[#0B1120] overflow-hidden">
-          <div className="p-5 border-b border-slate-800 space-y-2.5">
+        <section className="lg:col-span-7 rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] overflow-hidden">
+          <div className="p-5 border-b border-white/[0.06] space-y-2.5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="font-mono text-xs text-slate-400">
+              <span className="font-mono text-xs text-zinc-400">
                 acme-corp/border-commerce · Pull Request #{selectedPr.prNumber}
               </span>
               <span
@@ -508,12 +508,12 @@ export function CicdGateTab({
               </span>
             </div>
 
-            <h3 className="font-display text-base font-semibold text-slate-100">
+            <h3 className="font-display text-base font-semibold text-zinc-100">
               {selectedPr.title}
             </h3>
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 font-mono">
-              <span className="inline-flex items-center gap-1 text-sky-300">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400 font-mono">
+              <span className="inline-flex items-center gap-1 text-cyan-300">
                 <GitBranch className="w-3.5 h-3.5" />
                 {selectedPr.baseBranch} ← {selectedPr.branch}
               </span>
@@ -532,19 +532,19 @@ export function CicdGateTab({
             {selectedPr.files.map((file) => (
               <div
                 key={file.filename}
-                className="rounded-lg border border-slate-800 bg-[#060913] overflow-hidden"
+                className="rounded-lg border border-white/[0.07] bg-[#08080A] overflow-hidden"
               >
-                <div className="px-3.5 py-2 border-b border-slate-800 bg-[#090E1C] font-mono text-xs text-slate-300">
+                <div className="px-3.5 py-2 border-b border-white/[0.06] bg-white/[0.02] font-mono text-xs text-zinc-300">
                   {file.filename}
                 </div>
                 <div className="p-2.5 font-mono text-xs overflow-x-auto space-y-0.5">
                   {file.lines.map((line, idx) => {
                     const cls =
                       line.type === 'add'
-                        ? 'bg-emerald-950/50 text-emerald-300'
+                        ? 'bg-emerald-500/[0.12] text-emerald-300'
                         : line.type === 'remove'
-                          ? 'bg-rose-950/50 text-rose-300'
-                          : 'text-slate-400';
+                          ? 'bg-rose-500/[0.12] text-rose-300'
+                          : 'text-zinc-400';
                     const prefix =
                       line.type === 'add' ? '+' : line.type === 'remove' ? '-' : ' ';
                     return (
@@ -566,10 +566,10 @@ export function CicdGateTab({
         <section className="lg:col-span-5 space-y-5">
           {/* GitHub Actions Check Status + Merge Box */}
           <div
-            className={`rounded-xl border p-5 space-y-4 ${
+            className={`rounded-xl border p-5 space-y-4 bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
               isBlocked
-                ? 'border-rose-800/70 bg-rose-950/20'
-                : 'border-emerald-800/70 bg-emerald-950/20'
+                ? 'border-rose-500/40'
+                : 'border-emerald-500/40'
             }`}
           >
             <div className="flex items-start gap-3">
@@ -579,12 +579,12 @@ export function CicdGateTab({
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
               )}
               <div>
-                <div className="font-mono text-xs font-semibold text-slate-100">
+                <div className="font-mono text-xs font-semibold text-zinc-100">
                   {isBlocked
                     ? '❌ Border Checker Gate — Deployment Blocked'
                     : '✅ Border Checker Gate — Passed'}
                 </div>
-                <p className="text-xs text-slate-300 mt-1">
+                <p className="text-xs text-zinc-300 mt-1 leading-relaxed">
                   {isBlocked
                     ? `판정 ${evaluation.verdict} (충족률 ${evaluation.stats.pass_rate_percent}% · ${evaluation.stats.passed_rule_count}/${evaluation.stats.total_evaluated_rules}): BLOCKER ${evaluation.stats.blocker_count}건 · Drift ${evaluation.stats.drift_count}건이 해소되기 전까지 머지가 잠금 처리됩니다.`
                     : `판정 ${evaluation.verdict} (충족률 ${evaluation.stats.pass_rate_percent}% · ${evaluation.stats.passed_rule_count}/${evaluation.stats.total_evaluated_rules}): 자동 매칭 법률 팩(${evaluation.applied_pack_versions.filter((p) => p.applicable).length}종) 검증을 통과했습니다.`}
@@ -592,8 +592,8 @@ export function CicdGateTab({
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
-              <div className="text-[11px] font-mono text-slate-400">
+            <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between gap-3">
+              <div className="text-[11px] font-mono text-zinc-400">
                 활성 팩 {activePacks.length}종 적용됨
               </div>
 
@@ -601,7 +601,7 @@ export function CicdGateTab({
                 <button
                   type="button"
                   disabled
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-500 text-xs font-semibold cursor-not-allowed whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#08080A] border border-white/[0.08] text-zinc-500 text-xs font-semibold cursor-not-allowed whitespace-nowrap"
                 >
                   <Lock className="w-3.5 h-3.5" />
                   <span>Merge pull request (Locked)</span>
@@ -611,7 +611,7 @@ export function CicdGateTab({
                   type="button"
                   onClick={() => setMergedSuccess(true)}
                   disabled={mergedSuccess}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-70 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#FAFAFA] hover:bg-white disabled:opacity-60 text-[#050507] text-xs font-semibold transition-colors whitespace-nowrap"
                 >
                   <GitMerge className="w-3.5 h-3.5" />
                   <span>
@@ -623,36 +623,36 @@ export function CicdGateTab({
           </div>
 
           {/* Border Checker Bot Automated Review Comment */}
-          <div className="rounded-xl border border-slate-800 bg-[#0B1120] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-800 bg-[#090E1C] flex items-center justify-between">
+          <div className="rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] bg-white/[0.02] flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs">
-                <Bot className="w-4 h-4 text-sky-400" />
-                <span className="font-semibold text-slate-100">
+                <Bot className="w-4 h-4 text-cyan-400" />
+                <span className="font-semibold text-zinc-100">
                   border-checker-bot
                 </span>
-                <span className="font-mono text-[11px] text-slate-400">
+                <span className="font-mono text-[11px] text-zinc-500">
                   commented just now
                 </span>
               </div>
-              <span className="font-mono text-[11px] text-slate-400 tabular-nums">
+              <span className="font-mono text-[11px] text-zinc-400 tabular-nums">
                 충족률 {evaluation.stats.passed_rule_count}/
                 {evaluation.stats.total_evaluated_rules} ({evaluation.stats.pass_rate_percent}%)
               </span>
             </div>
 
             <div className="p-4 space-y-3 text-xs leading-relaxed">
-              <div className="font-semibold text-slate-100">
+              <div className="font-semibold text-zinc-100">
                 {evaluation.summary_headline}
               </div>
-              <p className="text-slate-300">{evaluation.summary_detail}</p>
+              <p className="text-zinc-300">{evaluation.summary_detail}</p>
 
               {evaluation.detected_drifts.length > 0 && (
-                <div className="rounded-lg border border-amber-800/60 bg-amber-950/25 p-3 space-y-1">
+                <div className="rounded-lg border border-amber-500/35 bg-amber-500/[0.06] p-3 space-y-1">
                   <div className="font-mono text-[11px] font-semibold text-amber-300">
                     Policy-Infra Drift ({evaluation.detected_drifts.length}건)
                   </div>
                   {evaluation.detected_drifts.map((d) => (
-                    <div key={d.rule_id} className="text-[11px] text-slate-200">
+                    <div key={d.rule_id} className="text-[11px] text-zinc-200">
                       • {d.summary}
                     </div>
                   ))}
@@ -661,34 +661,36 @@ export function CicdGateTab({
 
               {evaluation.triggered_rules.length > 0 ? (
                 <div className="space-y-1.5">
-                  <div className="font-medium text-slate-300">
+                  <div className="font-medium text-zinc-300">
                     탐지된 점검 항목 ({evaluation.triggered_rules.length}건):
                   </div>
-                  {evaluation.triggered_rules.slice(0, 5).map((r) => (
-                    <div
-                      key={r.rule_id}
-                      className="rounded border border-slate-800 bg-[#060913] px-3 py-2 flex items-start gap-2"
-                    >
-                      <AlertOctagon
-                        className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
-                          r.severity === 'BLOCKER'
-                            ? 'text-rose-400'
-                            : 'text-amber-400'
-                        }`}
-                      />
-                      <div className="min-w-0">
-                        <div className="font-mono text-[10px] text-slate-400">
-                          [{r.severity}] {r.pack_id} · {r.article_citation}
-                        </div>
-                        <div className="text-slate-200 font-medium">
-                          {r.plain_title}
+                  <div className="rounded-lg border border-white/[0.07] bg-[#08080A] divide-y divide-white/[0.06]">
+                    {evaluation.triggered_rules.slice(0, 5).map((r) => (
+                      <div
+                        key={r.rule_id}
+                        className="px-3 py-2.5 flex items-start gap-2"
+                      >
+                        <AlertOctagon
+                          className={`w-3.5 h-3.5 shrink-0 mt-0.5 ${
+                            r.severity === 'BLOCKER'
+                              ? 'text-rose-400'
+                              : 'text-amber-400'
+                          }`}
+                        />
+                        <div className="min-w-0">
+                          <div className="font-mono text-[10px] text-zinc-400">
+                            [{r.severity}] {r.pack_id} · {r.article_citation}
+                          </div>
+                          <div className="text-zinc-200 font-medium">
+                            {r.plain_title}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <div className="rounded-lg border border-emerald-800/60 bg-emerald-950/20 p-3 text-emerald-200">
+                <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/[0.06] p-3 text-emerald-200">
                   처리방침 고지문과 코드·인프라 변경분이 100% 일치합니다.
                 </div>
               )}
@@ -698,15 +700,15 @@ export function CicdGateTab({
       </div>
 
       {/* GitHub Actions Workflow Generator */}
-      <section className="rounded-xl border border-slate-800 bg-[#0B1120] overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <section className="rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2">
-            <Terminal className="w-4 h-4 text-sky-400" />
+            <Terminal className="w-4 h-4 text-cyan-400" />
             <div>
-              <h3 className="font-display text-sm font-semibold text-slate-100">
+              <h3 className="font-display text-sm font-semibold text-zinc-100">
                 레포지토리 즉시 도입용 GitHub Actions 워크플로우
               </h3>
-              <p className="text-[11px] font-mono text-slate-400">
+              <p className="text-[11px] font-mono text-zinc-500">
                 .github/workflows/border-checker.yml
               </p>
             </div>
@@ -716,7 +718,7 @@ export function CicdGateTab({
             <button
               type="button"
               onClick={handleCopyYaml}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
             >
               {copiedYaml ? (
                 <>
@@ -734,7 +736,7 @@ export function CicdGateTab({
             <button
               type="button"
               onClick={handleDownloadYaml}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#FAFAFA] hover:bg-white text-[#050507] text-xs font-semibold transition-colors whitespace-nowrap"
             >
               <Download className="w-3.5 h-3.5" />
               <span>.yml 다운로드</span>
@@ -742,7 +744,7 @@ export function CicdGateTab({
           </div>
         </div>
 
-        <pre className="p-4 text-xs font-mono text-slate-200 bg-[#060913] overflow-x-auto leading-relaxed">
+        <pre className="p-4 text-xs font-mono text-zinc-300 bg-[#08080A] overflow-x-auto leading-relaxed">
           {GITHUB_WORKFLOW_YAML}
         </pre>
       </section>

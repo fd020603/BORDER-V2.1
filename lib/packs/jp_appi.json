@@ -451,6 +451,82 @@
         "legal_template": "[요배려개인정보의 취득 및 동의] 당사는 [입력 필요: 건강관리/진료 지원 등 구체적 이용목적]을 위해 본인의 병력 등 요배려개인정보([입력 필요: 세부 항목])를 취득합니다. 해당 정보는 법령상 예외에 해당하는 경우를 제외하고 사전에 본인의 명시적 동의를 얻은 경우에만 취득·이용합니다.",
         "infra_patch_hint": "병력·건강정보 등 민감 필드를 입력받는 UI 직전에 일반 약관 동의와 분리된 별도의 체크박스(사전 명시적 동의)를 구현하고, 동의 이력을 DB에 기록하세요."
       }
+    },
+    {
+      "rule_id": "JP-APPI-28-UNDISCLOSED-COUNTRY",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "일본 개인정보보호법 제28조 제2항·제3항, 제32조 제1항",
+      "plain_title": "실제 국외 이전 국가 대비 처리방침 수신국 고지 누락(미공개 이전국) 탐지",
+      "plain_explanation": "인프라 리전 또는 외부 벤더를 통해 일본 국외(예: KR, US 등)로 개인데이터가 이전·보관되고 있으나, 개인정보 처리방침의 이전 대상 국가 목록에 해당 국가가 누락되어 있습니다.",
+      "condition_dsl": {
+        "all": [
+          {
+            "fact": "transfers.has_cross_border",
+            "operator": "equals",
+            "value": true
+          },
+          {
+            "fact": "derived.has_undisclosed_destination_country",
+            "operator": "equals",
+            "value": true
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "drift_type": "UNDISCLOSED_COUNTRY",
+        "fact_path": "derived.undisclosed_destination_countries",
+        "doc_claim_path": "legal_doc.disclosed_countries",
+        "condition": {
+          "all": [
+            {
+              "fact": "transfers.has_cross_border",
+              "operator": "equals",
+              "value": true
+            },
+            {
+              "fact": "derived.has_undisclosed_destination_country",
+              "operator": "equals",
+              "value": true
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 실제 인프라·외부 서비스가 데이터를 저장·전송하는 국가가 일본 개인정보 처리방침의 이전 대상 국가 목록에 기재되어 있지 않습니다."
+      },
+      "remediation": {
+        "legal_template": "[외국 소재 이전 국가 보완] 당사는 실제 데이터 처리·보관 리전 및 수탁사 소재국([입력 필요: 누락된 국가명 일체])과 해당 국가의 개인정보보호 제도 정보를 개인정보 처리방침에 추가 공표합니다.",
+        "infra_patch_hint": "사용 중인 해외 클라우드 리전(예: 서울 ap-northeast-2, 버지니아 us-east-1 등)을 일본 리전(ap-northeast-1)으로 통합하거나 처리방침에 모든 실제 이전 국가를 명시하세요."
+      }
+    },
+    {
+      "rule_id": "JP-APPI-27-UNDISCLOSED-VENDOR",
+      "category": "DISCLOSURE",
+      "severity": "WARNING",
+      "article_citation": "일본 개인정보보호법 제27조·제28조 제3항",
+      "plain_title": "연동된 외부 수탁사·벤더 대비 처리방침 내 수령인 고지 누락 탐지",
+      "plain_explanation": "개인정보를 처리하는 외부 SaaS·API 벤더가 연동되어 있으나, 개인정보 처리방침에 해당 외부 수탁사/수령인 명칭이 명시되어 있지 않습니다.",
+      "condition_dsl": {
+        "fact": "derived.has_undisclosed_vendor",
+        "operator": "equals",
+        "value": true
+      },
+      "drift_check": {
+        "enabled": true,
+        "drift_type": "UNDISCLOSED_VENDOR",
+        "fact_path": "derived.undisclosed_vendors",
+        "doc_claim_path": "legal_doc.disclosed_vendors",
+        "condition": {
+          "fact": "derived.has_undisclosed_vendor",
+          "operator": "equals",
+          "value": true
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 코드·인프라에서 개인정보를 처리하는 외부 벤더가 탐지되었으나 처리방침의 수탁자·수령인 목록에 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[외부 위탁·제공처 목록 보완] 당사는 서비스 운영을 위해 [입력 필요: 누락된 외부 벤더명]에 개인데이터 처리를 위탁·제공하고 있습니다.",
+        "infra_patch_hint": "코드베이스에 추가된 모든 외부 PII 처리 SDK를 처리방침의 수탁사 목록과 동기화하세요."
+      }
     }
   ]
 }

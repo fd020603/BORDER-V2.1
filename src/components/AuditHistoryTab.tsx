@@ -155,27 +155,27 @@ export function AuditHistoryTab({
   return (
     <div className="space-y-6">
       {/* Header + Scope Switch */}
-      <section className="no-print rounded-xl border border-slate-800 bg-[#0B1120] p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <section className="no-print rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <History className="w-5 h-5 text-sky-400" />
-            <h2 className="font-display text-base font-semibold text-slate-100">
+            <History className="w-5 h-5 text-cyan-400" />
+            <h2 className="font-display text-base font-semibold text-zinc-100">
               평가 이력 대시보드 &amp; 감사 증빙 리포트
             </h2>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-zinc-400 mt-1">
             프로필별 점검 항목 충족률(%) 추이와 적용된 4계층 법률 팩 스냅샷을 조회하고 PDF 증빙 문서로 출력합니다.
           </p>
         </div>
 
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-[#060913] border border-slate-800 shrink-0">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-[#08080A] border border-white/[0.07] shrink-0">
           <button
             type="button"
             onClick={() => setScope('profile')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${
               scope === 'profile'
-                ? 'bg-sky-500 text-slate-950 font-semibold'
-                : 'text-slate-300 hover:text-slate-100'
+                ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#050507] font-semibold'
+                : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
             }`}
           >
             현재 프로필 ({activeProfile.profile_name})
@@ -183,10 +183,10 @@ export function AuditHistoryTab({
           <button
             type="button"
             onClick={() => setScope('all')}
-            className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+            className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${
               scope === 'all'
-                ? 'bg-sky-500 text-slate-950 font-semibold'
-                : 'text-slate-300 hover:text-slate-100'
+                ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#050507] font-semibold'
+                : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
             }`}
           >
             전체 프로필
@@ -195,25 +195,25 @@ export function AuditHistoryTab({
       </section>
 
       {/* Pure SVG Pass Rate Trend Line Chart */}
-      <section className="no-print rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-3">
+      <section className="no-print rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5 space-y-3">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-sky-400" />
-            <h3 className="font-display text-sm font-semibold text-slate-100">
+            <TrendingUp className="w-4 h-4 text-cyan-400" />
+            <h3 className="font-display text-sm font-semibold text-zinc-100">
               최근 점검 항목 충족률(%) 변화 추이
             </h3>
           </div>
-          <span className="font-mono text-xs text-slate-400 tabular-nums">
+          <span className="font-mono text-xs text-zinc-400 tabular-nums">
             최근 {chartPoints.length}회 심사
           </span>
         </div>
 
         {chartPoints.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-800 py-8 text-center text-xs text-slate-400">
+          <div className="rounded-lg border border-dashed border-white/[0.1] py-8 text-center text-xs text-zinc-400">
             표시할 심사 이력이 없습니다. `Live Audit Studio`에서 출입국 심사를 실행해 주세요.
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-800 bg-[#060913] p-3 overflow-x-auto">
+          <div className="rounded-lg border border-white/[0.07] bg-[#08080A] p-3 overflow-x-auto">
             <svg viewBox="0 0 680 175" className="w-full min-w-[520px] h-44">
               {[0, 50, 100].map((val) => {
                 const y = 20 + ((100 - val) / 100) * 120;
@@ -224,14 +224,14 @@ export function AuditHistoryTab({
                       y1={y}
                       x2="644"
                       y2={y}
-                      stroke="#1e293b"
+                      stroke="rgba(255,255,255,0.08)"
                       strokeDasharray="4 4"
                     />
                     <text
                       x="30"
                       y={y + 4}
                       textAnchor="end"
-                      fill="#64748b"
+                      fill="#71717A"
                       fontSize="10"
                       fontFamily="JetBrains Mono, monospace"
                     >
@@ -244,7 +244,7 @@ export function AuditHistoryTab({
               {chartPoints.length > 1 && (
                 <polyline
                   fill="none"
-                  stroke="#38bdf8"
+                  stroke="#38BDF8"
                   strokeWidth="2.5"
                   points={polylinePoints}
                 />
@@ -253,10 +253,10 @@ export function AuditHistoryTab({
               {chartPoints.map(({ x, y, passRate, rec }) => {
                 const dotColor =
                   rec.verdict === 'APPROVED'
-                    ? '#34d399'
+                    ? '#34D399'
                     : rec.verdict === 'DRIFT_DETECTED'
-                      ? '#fbbf24'
-                      : '#f43f5e';
+                      ? '#FBBF24'
+                      : '#F43F5E';
                 return (
                   <g
                     key={rec.id}
@@ -268,14 +268,14 @@ export function AuditHistoryTab({
                       cy={y}
                       r="5"
                       fill={dotColor}
-                      stroke="#060913"
+                      stroke="#08080A"
                       strokeWidth="2"
                     />
                     <text
                       x={x}
                       y={y - 10}
                       textAnchor="middle"
-                      fill="#cbd5e1"
+                      fill="#E4E4E7"
                       fontSize="10"
                       fontFamily="JetBrains Mono, monospace"
                     >
@@ -285,7 +285,7 @@ export function AuditHistoryTab({
                       x={x}
                       y="162"
                       textAnchor="middle"
-                      fill="#64748b"
+                      fill="#71717A"
                       fontSize="9"
                       fontFamily="JetBrains Mono, monospace"
                     >
@@ -303,9 +303,9 @@ export function AuditHistoryTab({
       </section>
 
       {/* Audit History Table */}
-      <section className="no-print rounded-xl border border-slate-800 bg-[#0B1120] p-5">
+      <section className="no-print rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-          <h3 className="font-display text-sm font-semibold text-slate-100">
+          <h3 className="font-display text-sm font-semibold text-zinc-100">
             심사 스냅샷 기록 ({visibleRecords.length}건)
           </h3>
           <div className="flex flex-wrap items-center gap-2">
@@ -323,15 +323,15 @@ export function AuditHistoryTab({
             <button
               type="button"
               onClick={handleExportBackup}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#060913] border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#08080A] border border-white/[0.1] hover:border-white/[0.2] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
             >
-              <Download className="w-3.5 h-3.5 text-sky-400" />
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
               <span>워크스페이스 JSON 내보내기</span>
             </button>
             <button
               type="button"
               onClick={() => backupInputRef.current?.click()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#060913] border border-slate-700 hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#08080A] border border-white/[0.1] hover:border-white/[0.2] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
             >
               <Upload className="w-3.5 h-3.5 text-emerald-400" />
               <span>백업 가져오기</span>
@@ -339,7 +339,7 @@ export function AuditHistoryTab({
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAFAFA] hover:bg-white text-xs font-semibold text-[#050507] transition-colors whitespace-nowrap"
             >
               <Printer className="w-3.5 h-3.5" />
               <span>감사 증빙 리포트 PDF 출력</span>
@@ -348,14 +348,14 @@ export function AuditHistoryTab({
         </div>
 
         {visibleRecords.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-800 py-10 text-center text-xs text-slate-400">
+          <div className="rounded-lg border border-dashed border-white/[0.1] py-10 text-center text-xs text-zinc-400">
             선택된 프로필에 기록된 심사 스냅샷이 없습니다.
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead>
-                <tr className="border-b border-slate-800 text-slate-400">
+                <tr className="border-b border-white/[0.07] text-zinc-500">
                   <th className="py-2.5 pr-4 font-medium">검사 일시</th>
                   <th className="py-2.5 pr-4 font-medium">프로필 · 대상</th>
                   <th className="py-2.5 pr-4 font-medium">판정 스탬프</th>
@@ -365,14 +365,14 @@ export function AuditHistoryTab({
                   <th className="py-2.5 font-medium text-right">동작</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/80">
+              <tbody className="divide-y divide-white/[0.06]">
                 {visibleRecords.map((rec) => {
                   const verdictColor =
                     rec.verdict === 'APPROVED'
-                      ? 'border-emerald-700/70 text-emerald-300 bg-emerald-950/30'
+                      ? 'border-emerald-500/35 text-emerald-300 bg-emerald-500/[0.08]'
                       : rec.verdict === 'DRIFT_DETECTED'
-                        ? 'border-amber-700/70 text-amber-300 bg-amber-950/30'
-                        : 'border-rose-700/70 text-rose-300 bg-rose-950/30';
+                        ? 'border-amber-500/35 text-amber-300 bg-amber-500/[0.08]'
+                        : 'border-rose-500/35 text-rose-300 bg-rose-500/[0.08]';
 
                   const applicablePacks = rec.applied_pack_versions.filter(
                     (p) => p.applicable,
@@ -381,15 +381,15 @@ export function AuditHistoryTab({
                     getRecordPassMetrics(rec);
 
                   return (
-                    <tr key={rec.id} className="hover:bg-slate-800/30">
-                      <td className="py-3 pr-4 font-mono text-slate-400 tabular-nums whitespace-nowrap">
+                    <tr key={rec.id} className="hover:bg-white/[0.02]">
+                      <td className="py-3 pr-4 font-mono text-zinc-400 tabular-nums whitespace-nowrap">
                         {new Date(rec.evaluated_at).toLocaleString('ko-KR')}
                       </td>
                       <td className="py-3 pr-4">
-                        <div className="text-slate-100 font-medium">
+                        <div className="text-zinc-100 font-medium">
                           {rec.scenario_label}
                         </div>
-                        <div className="text-[11px] text-slate-400">
+                        <div className="text-[11px] text-zinc-500">
                           {rec.profile_name}
                         </div>
                       </td>
@@ -400,19 +400,19 @@ export function AuditHistoryTab({
                           {rec.verdict}
                         </span>
                       </td>
-                      <td className="py-3 pr-4 font-mono text-right text-slate-100 tabular-nums whitespace-nowrap">
+                      <td className="py-3 pr-4 font-mono text-right text-zinc-100 tabular-nums whitespace-nowrap">
                         {passedCount !== null && totalCount !== null
                           ? `${passRate}% (${passedCount}/${totalCount})`
                           : `${passRate}%`}
                       </td>
                       <td className="py-3 pr-4 font-mono text-right tabular-nums whitespace-nowrap">
                         <span className="text-rose-300">{rec.blocker_count}</span>
-                        <span className="text-slate-600"> / </span>
+                        <span className="text-zinc-600"> / </span>
                         <span className="text-amber-300">{rec.drift_count}</span>
                       </td>
-                      <td className="py-3 pr-4 font-mono text-[11px] text-slate-300">
+                      <td className="py-3 pr-4 font-mono text-[11px] text-zinc-300">
                         {applicablePacks.length === 0 ? (
-                          <span className="text-slate-500">적용 팩 없음</span>
+                          <span className="text-zinc-500">적용 팩 없음</span>
                         ) : (
                           <div className="flex flex-wrap gap-1">
                             {applicablePacks.map((p, idx) => {
@@ -423,7 +423,7 @@ export function AuditHistoryTab({
                               return (
                                 <span
                                   key={`${p.pack_id}-${p.version}-${idx}`}
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#060913] border border-slate-800 text-[10px] text-slate-200"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#08080A] border border-white/[0.08] text-[10px] text-zinc-200"
                                 >
                                   L{p.layer} {label}
                                   {versionTag ? ` ${versionTag}` : ''}
@@ -438,7 +438,7 @@ export function AuditHistoryTab({
                           <button
                             type="button"
                             onClick={() => setSelectedSnapshot(rec)}
-                            className="inline-flex items-center gap-1 text-slate-300 hover:text-slate-100"
+                            className="inline-flex items-center gap-1 text-zinc-300 hover:text-zinc-100 transition-colors"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             <span>상세 보기</span>
@@ -446,7 +446,7 @@ export function AuditHistoryTab({
                           <button
                             type="button"
                             onClick={() => onRestoreToStudio(rec)}
-                            className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 font-medium"
+                            className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 font-medium transition-colors"
                           >
                             <RotateCcw className="w-3.5 h-3.5" />
                             <span>스튜디오 복원</span>
@@ -455,7 +455,7 @@ export function AuditHistoryTab({
                             type="button"
                             onClick={() => onDeleteRecord(rec.id)}
                             aria-label="이력 삭제"
-                            className="p-1 text-slate-500 hover:text-rose-300"
+                            className="p-1 text-zinc-500 hover:text-rose-300 transition-colors"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
@@ -479,7 +479,7 @@ export function AuditHistoryTab({
       {/* Snapshot Detail Modal */}
       {selectedSnapshot && (
         <div
-          className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75"
+          className="no-print fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setSelectedSnapshot(null);
           }}
@@ -488,11 +488,11 @@ export function AuditHistoryTab({
             role="dialog"
             aria-modal="true"
             aria-labelledby="snapshot-detail-modal-title"
-            className="w-full max-w-3xl max-h-[88vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden"
+            className="w-full max-w-3xl max-h-[88vh] rounded-xl border border-white/[0.1] bg-[#0C0C0F] shadow-2xl flex flex-col overflow-hidden"
           >
-            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
+            <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between gap-4">
               <div>
-                <div className="font-mono text-xs text-sky-300">
+                <div className="font-mono text-xs text-cyan-300">
                   {new Date(selectedSnapshot.evaluated_at).toLocaleString('ko-KR')} ·{' '}
                   {selectedSnapshot.verdict} · 충족률{' '}
                   {(() => {
@@ -504,7 +504,7 @@ export function AuditHistoryTab({
                 </div>
                 <h3
                   id="snapshot-detail-modal-title"
-                  className="font-display text-base font-semibold text-slate-100 mt-0.5"
+                  className="font-display text-base font-semibold text-zinc-100 mt-0.5"
                 >
                   {selectedSnapshot.scenario_label}
                 </h3>
@@ -514,7 +514,7 @@ export function AuditHistoryTab({
                 <button
                   type="button"
                   onClick={() => window.print()}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-semibold"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#FAFAFA] hover:bg-white text-[#050507] text-xs font-semibold transition-colors"
                 >
                   <Printer className="w-3.5 h-3.5" />
                   <span>감사 증빙 리포트 PDF 출력</span>
@@ -523,7 +523,7 @@ export function AuditHistoryTab({
                   type="button"
                   onClick={() => setSelectedSnapshot(null)}
                   aria-label="닫기"
-                  className="p-1.5 text-slate-400 hover:text-slate-100 rounded"
+                  className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -531,14 +531,14 @@ export function AuditHistoryTab({
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4 text-xs">
-              <div className="rounded-lg border border-slate-800 bg-[#060913] p-4 space-y-2">
-                <div className="font-semibold text-slate-100">
+              <div className="rounded-lg border border-white/[0.07] bg-[#08080A] p-4 space-y-2">
+                <div className="font-semibold text-zinc-100">
                   {selectedSnapshot.result_snapshot.summary_headline}
                 </div>
-                <p className="text-slate-300">
+                <p className="text-zinc-300">
                   {selectedSnapshot.result_snapshot.summary_detail}
                 </p>
-                <div className="font-mono text-[11px] text-slate-400 pt-1">
+                <div className="font-mono text-[11px] text-zinc-400 pt-1">
                   적용 팩:{' '}
                   {selectedSnapshot.applied_pack_versions
                     .filter((p) => p.applicable)
@@ -553,39 +553,41 @@ export function AuditHistoryTab({
               </div>
 
               <div className="space-y-2">
-                <div className="font-semibold text-slate-200">
+                <div className="font-semibold text-zinc-200">
                   조항별 점검 결과 ({selectedSnapshot.result_snapshot.triggered_rules.length}건)
                 </div>
                 {selectedSnapshot.result_snapshot.triggered_rules.length === 0 ? (
-                  <div className="rounded-lg border border-emerald-900/50 bg-emerald-950/20 p-3 text-emerald-200">
+                  <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/[0.06] p-3 text-emerald-200">
                     위반 또는 누락 항목 없음 (전 계층 정합성 통과)
                   </div>
                 ) : (
-                  selectedSnapshot.result_snapshot.triggered_rules.map((r, idx) => {
-                    const matchedPack = selectedSnapshot.applied_pack_versions.find(
-                      (p) => p.pack_id === r.pack_id,
-                    );
-                    const rawVer = r.pack_version || matchedPack?.version || '';
-                    const versionTag = rawVer
-                      ? `v${rawVer.replace(/^v/i, '')}`
-                      : '';
-                    const lawName = r.pack_name || matchedPack?.law_name || r.pack_id;
+                  <div className="rounded-lg border border-white/[0.07] bg-[#08080A] divide-y divide-white/[0.06]">
+                    {selectedSnapshot.result_snapshot.triggered_rules.map((r, idx) => {
+                      const matchedPack = selectedSnapshot.applied_pack_versions.find(
+                        (p) => p.pack_id === r.pack_id,
+                      );
+                      const rawVer = r.pack_version || matchedPack?.version || '';
+                      const versionTag = rawVer
+                        ? `v${rawVer.replace(/^v/i, '')}`
+                        : '';
+                      const lawName = r.pack_name || matchedPack?.law_name || r.pack_id;
 
-                    return (
-                      <div
-                        key={`${r.pack_id}-${rawVer}-${r.rule_id}-${idx}`}
-                        className="rounded-lg border border-slate-800 bg-[#060913] p-3 space-y-1"
-                      >
-                        <div className="font-mono text-[11px] text-slate-400">
-                          [{r.severity}] Layer {r.layer} · {lawName}
-                          {versionTag ? ` ${versionTag}` : ''} ({r.pack_id}) ·{' '}
-                          {r.article_citation}
+                      return (
+                        <div
+                          key={`${r.pack_id}-${rawVer}-${r.rule_id}-${idx}`}
+                          className="p-3.5 space-y-1"
+                        >
+                          <div className="font-mono text-[11px] text-zinc-400">
+                            [{r.severity}] Layer {r.layer} · {lawName}
+                            {versionTag ? ` ${versionTag}` : ''} ({r.pack_id}) ·{' '}
+                            {r.article_citation}
+                          </div>
+                          <div className="font-semibold text-zinc-100">{r.plain_title}</div>
+                          <div className="text-zinc-300">{r.plain_explanation}</div>
                         </div>
-                        <div className="font-semibold text-slate-100">{r.plain_title}</div>
-                        <div className="text-slate-300">{r.plain_explanation}</div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

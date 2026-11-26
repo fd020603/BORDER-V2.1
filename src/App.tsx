@@ -38,9 +38,7 @@ import type {
 import {
   ChevronDown,
   ChevronUp,
-  Compass,
   Loader2,
-  Play,
   SlidersHorizontal,
   Square,
 } from 'lucide-react';
@@ -52,30 +50,18 @@ import { CicdGateTab } from './components/CicdGateTab';
 import { DriftComparisonCard } from './components/DriftComparisonCard';
 import { DualRemediationKit } from './components/DualRemediationKit';
 import { GuidedAuditWizard } from './components/GuidedAuditWizard';
-import { InputStudio, type InspectionStageState } from './components/InputStudio';
+import type { InspectionStageState } from './components/InputStudio';
 import { LlmSettingsModal } from './components/LlmSettingsModal';
 import { PolicyPacksTab } from './components/PolicyPacksTab';
 import { ProfileModal } from './components/ProfileModal';
+import { ScenarioDropdown } from './components/ScenarioDropdown';
 import {
   ToastContainer,
   type ToastItem,
   type ToastVariant,
 } from './components/Toast';
 
-type AuditStudioMode = 'guided' | 'pro';
-const STUDIO_MODE_STORAGE_KEY = 'bc_v2_studio_mode';
-
-function readInitialStudioMode(): AuditStudioMode {
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const saved = window.localStorage.getItem(STUDIO_MODE_STORAGE_KEY);
-      if (saved === 'guided' || saved === 'pro') return saved;
-    }
-  } catch {
-    // ignore storage errors
-  }
-  return 'guided';
-}
+type ReportTabId = 'overview' | 'audit' | 'remediation';
 
 function cloneValue<T>(val: T): T {
   return JSON.parse(JSON.stringify(val)) as T;
@@ -152,11 +138,18 @@ function buildTransfersFromWorkspace(state: ProfileWorkspaceState): CanonicalFac
   const normalizedVendors = state.detectedVendors.map(normalizeVendorItem);
   const activeVendors = normalizedVendors.filter((v) => v.includes_pii !== false);
 
+  const infraCountries = Array.from(
+    new Set(
+      [...regionCountries, ...(heuristic.infra_countries ?? [])]
+        .map((c) => c.toUpperCase())
+        .filter((c) => c.length > 0 && c !== businessCountry),
+    ),
+  );
+
   const destinationCountries = Array.from(
     new Set(
       [
-        ...regionCountries,
-        ...(heuristic.infra_countries ?? []),
+        ...infraCountries,
         ...activeVendors.map((v) => v.data_residency_country),
       ]
         .map((c) => c.toUpperCase())
@@ -174,6 +167,7 @@ function buildTransfersFromWorkspace(state: ProfileWorkspaceState): CanonicalFac
   return {
     has_cross_border: hasCrossBorder,
     destination_countries: destinationCountries,
+    infra_countries: infraCountries,
     detected_vendors: normalizedVendors,
     virtual_transfer: state.virtualTransfer,
   };
@@ -268,11 +262,11 @@ export default function App() {
   );
   const [llmModalOpen, setLlmModalOpen] = useState(false);
   const [profileModalOpen, setProfileModalOpen] = useState(false);
-  const [studioMode, setStudioMode] = useState<AuditStudioMode>(() =>
-    readInitialStudioMode(),
-  );
   const [inputStudioOpen, setInputStudioOpen] = useState(true);
+  const [reportTab, setReportTab] = useState<ReportTabId>('overview');
   const [isDirty, setIsDirty] = useState(false);
+  const [scanPulseKey, setScanPulseKey] = useState(0);
+  const [showLaserScan, setShowLaserScan] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [inspectionState, setInspectionState] = useState<InspectionStageState>({
     running: false,
@@ -281,6 +275,7 @@ export default function App() {
 
   const reportSectionRef = useRef<HTMLDivElement | null>(null);
   const inspectionAbortRef = useRef<AbortController | null>(null);
+  const laserTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
     new Map(),
   );
@@ -288,6 +283,9 @@ export default function App() {
   useEffect(() => {
     const timers = toastTimersRef.current;
     return () => {
+      if (laserTimerRef.current) {
+        clearTimeout(laserTimerRef.current);
+      }
       timers.forEach((timer) => clearTimeout(timer));
       timers.clear();
     };
@@ -313,18 +311,6 @@ export default function App() {
     },
     [dismissToast],
   );
-
-  const handleChangeStudioMode = (nextMode: AuditStudioMode) => {
-    setStudioMode(nextMode);
-    setInputStudioOpen(true);
-    try {
-      if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(STUDIO_MODE_STORAGE_KEY, nextMode);
-      }
-    } catch {
-      // ignore storage errors
-    }
-  };
 
   const activePacks = useMemo(() => {
     return resolvePackCatalog(
@@ -634,6 +620,16 @@ export default function App() {
 
   const handleRunInspection = async () => {
     if (inspectionState.running) return;
+    if (laserTimerRef.current) {
+      clearTimeout(laserTimerRef.current);
+    }
+    setScanPulseKey((prev) => prev + 1);
+    setShowLaserScan(true);
+    laserTimerRef.current = setTimeout(() => {
+      setShowLaserScan(false);
+      laserTimerRef.current = null;
+    }, 640);
+
     const controller = new AbortController();
     inspectionAbortRef.current = controller;
     setActiveTab('live-audit');
@@ -711,6 +707,7 @@ export default function App() {
       setInspectionState({ running: false, stepIndex: 0 });
       setIsDirty(false);
       setInputStudioOpen(false);
+      setReportTab('overview');
       showToast(
         `출입국 심사 완료 · 판정 ${result.verdict} (충족률 ${result.stats.pass_rate_percent}% · ${result.stats.passed_rule_count}/${result.stats.total_evaluated_rules})`,
         result.verdict === 'APPROVED' ? 'success' : 'warning',
@@ -1070,197 +1067,142 @@ export default function App() {
         onCancelAudit={handleCancelInspection}
         isAuditing={inspectionState.running}
         isDirty={isDirty}
+        compliancePosture={{
+          complianceScore:
+            currentResult.stats.pass_rate_percent ??
+            currentResult.compliance_score ??
+            100,
+          verdict: currentResult.verdict,
+          blockerCount: currentResult.stats.blocker_count,
+          driftCount: currentResult.stats.drift_count,
+          activePackCount: currentResult.applied_pack_versions.filter(
+            (p) => p.applicable,
+          ).length,
+          totalPackCount:
+            currentResult.applied_pack_versions.length || activePacks.length,
+        }}
       >
         {activeTab === 'live-audit' && (
-          <div className="space-y-6">
-            {/* Independent Always-Visible Quick Demo Preset Bar */}
-            <section
-              aria-label="시연용 원클릭 데모 프리셋"
-              className="no-print rounded-xl border border-slate-800 bg-[#0B1120] px-4 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3"
-            >
-              <div className="flex items-center gap-2 text-xs text-slate-300">
-                <Play className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                <span className="font-semibold text-slate-100">
-                  원클릭 데모 시나리오
-                </span>
-                <span className="hidden sm:inline text-slate-400">
-                  · 입력창이 접혀 있어도 클릭 한 번으로 즉시 결과를 비교할 수 있습니다
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-1.5">
-                {DEMO_SCENARIOS.map((sc) => {
-                  const isSelected = sc.id === activeScenarioId;
-                  return (
-                    <button
-                      key={sc.id}
-                      type="button"
-                      onClick={() => handleLoadScenario(sc.id)}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
-                        isSelected
-                          ? 'bg-sky-500 text-slate-950 font-semibold'
-                          : 'bg-[#060913] text-slate-300 border border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {sc.short_label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
-
-            {/* Collapsible Input Studio + Beginner/Pro Mode Segmented Switch */}
-            <div className="no-print rounded-xl border border-slate-800 bg-[#0B1120] overflow-hidden">
-              <div className="px-5 py-3 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  {studioMode === 'guided' ? (
-                    <Compass className="w-4 h-4 text-sky-400 shrink-0" />
-                  ) : (
-                    <SlidersHorizontal className="w-4 h-4 text-sky-400 shrink-0" />
-                  )}
-                  <span className="font-display text-sm font-semibold text-slate-100 truncate">
-                    {studioMode === 'guided'
-                      ? '초보자 가이드 모드 (Step-by-Step)'
-                      : '전문가 자유 모드 (Pro Studio)'}
+          <div key="tab-live-audit" className="space-y-6 animate-panel-enter">
+            {/* Progressive Disclosure: 1-line Glassmorphic Summary Bar when collapsed, Obsidian Configuration Wizard when open */}
+            {!inputStudioOpen ? (
+              <div className="no-print rounded-xl bg-white/[0.03] backdrop-blur-md border border-white/[0.08] px-4 py-2.5 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 min-w-0 text-xs">
+                  <SlidersHorizontal className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span className="font-display font-semibold text-zinc-100 whitespace-nowrap">
+                    심사 대상 설정 (Audit Configuration)
                   </span>
-                  <span className="hidden sm:inline font-mono text-xs text-slate-400 tabular-nums whitespace-nowrap">
-                    · SDK {workspaceState.detectedVendors.length}종 · 리전{' '}
-                    {workspaceState.selectedRegions.length}개
+                  <span className="text-zinc-600">·</span>
+                  <span className="font-mono text-[11px] text-zinc-400 truncate tabular-nums">
+                    {workspaceState.businessCountry} · 대상{' '}
+                    {workspaceState.dataSubjectCountries.join(', ')} · SDK{' '}
+                    {workspaceState.detectedVendors.length}종 · 리전{' '}
+                    {workspaceState.selectedRegions.length}개 · 처리방침{' '}
+                    {workspaceState.noPolicyDoc
+                      ? '없음'
+                      : workspaceState.policyText.trim().length > 0
+                        ? `${workspaceState.policyText.trim().length}자`
+                        : '미입력'}
                   </span>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between lg:justify-end gap-2.5 shrink-0">
-                  {/* Guided <-> Pro Segmented Switch */}
-                  <div
-                    role="group"
-                    aria-label="입력 모드 전환"
-                    className="flex items-center gap-1 p-1 rounded-lg bg-[#060913] border border-slate-800"
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleChangeStudioMode('guided')}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                        studioMode === 'guided'
-                          ? 'bg-sky-500 text-slate-950 font-semibold'
-                          : 'text-slate-300 hover:text-slate-100'
-                      }`}
-                    >
-                      초보자 가이드 모드 (Step-by-Step)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleChangeStudioMode('pro')}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                        studioMode === 'pro'
-                          ? 'bg-sky-500 text-slate-950 font-semibold'
-                          : 'text-slate-300 hover:text-slate-100'
-                      }`}
-                    >
-                      전문가 자유 모드 (Pro Studio)
-                    </button>
-                  </div>
-
+                <div className="flex items-center gap-2 shrink-0">
+                  <ScenarioDropdown
+                    scenarios={DEMO_SCENARIOS}
+                    activeScenarioId={activeScenarioId}
+                    onSelectScenario={handleLoadScenario}
+                  />
                   <button
                     type="button"
-                    onClick={() => setInputStudioOpen((prev) => !prev)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-800 bg-[#060913] hover:border-slate-700 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap"
+                    onClick={() => setInputStudioOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.1] bg-white/[0.05] hover:bg-white/[0.09] text-xs font-medium text-zinc-100 transition-colors whitespace-nowrap shrink-0"
                   >
-                    <span>{inputStudioOpen ? '입력창 접기' : '입력 수정하기'}</span>
-                    {inputStudioOpen ? (
-                      <ChevronUp className="w-3.5 h-3.5" />
-                    ) : (
-                      <ChevronDown className="w-3.5 h-3.5" />
-                    )}
+                    <span>입력 설정 수정</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400" />
                   </button>
                 </div>
               </div>
+            ) : (
+              <div className="no-print rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]">
+                <div className="px-5 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <SlidersHorizontal className="w-4 h-4 text-cyan-400 shrink-0" />
+                    <span className="font-display text-sm font-semibold text-zinc-100 truncate">
+                      심사 대상 설정 (Audit Configuration)
+                    </span>
+                    <span className="hidden sm:inline font-mono text-xs text-zinc-500 tabular-nums whitespace-nowrap">
+                      · SDK {workspaceState.detectedVendors.length}종 · 리전{' '}
+                      {workspaceState.selectedRegions.length}개
+                    </span>
+                  </div>
 
-              {inputStudioOpen && (
-                <div className="p-5 pt-4 border-t border-slate-800">
-                  {studioMode === 'guided' ? (
-                    <GuidedAuditWizard
-                      businessCountry={workspaceState.businessCountry}
-                      dataSubjectCountries={workspaceState.dataSubjectCountries}
-                      industryDomain={workspaceState.industryDomain}
-                      selectedRegions={workspaceState.selectedRegions}
-                      detectedVendors={workspaceState.detectedVendors}
-                      policyText={workspaceState.policyText}
-                      noPolicyDoc={workspaceState.noPolicyDoc}
-                      infraCode={workspaceState.infraCode}
-                      virtualTransfer={workspaceState.virtualTransfer}
-                      security={workspaceState.security}
-                      activePacks={activePacks}
-                      inspectionState={inspectionState}
-                      onUpdateWorkspaceMeta={handleUpdateWorkspaceMeta}
-                      onToggleRegion={handleToggleRegion}
-                      onToggleSaasPreset={handleToggleSaasPreset}
-                      onApplyScannedVendors={handleApplyScannedVendors}
-                      onToggleVendorPii={handleToggleVendorPii}
-                      onChangeVendorPurpose={handleChangeVendorPurpose}
-                      onChangeVendorResidency={handleChangeVendorResidency}
-                      onRemoveVendor={handleRemoveVendor}
-                      onChangePolicyText={handleChangePolicyText}
-                      onToggleNoPolicyDoc={handleToggleNoPolicyDoc}
-                      onChangeInfraCode={handleChangeInfraCode}
-                      onChangeVirtualTransfer={handleChangeVirtualTransfer}
-                      onChangeSecurity={handleChangeSecurity}
-                      onRunInspection={handleRunInspection}
-                      onCancelInspection={handleCancelInspection}
-                      onShowToast={showToast}
-                    />
-                  ) : (
-                    <InputStudio
-                      businessCountry={workspaceState.businessCountry}
-                      dataSubjectCountries={workspaceState.dataSubjectCountries}
-                      industryDomain={workspaceState.industryDomain}
-                      selectedRegions={workspaceState.selectedRegions}
-                      detectedVendors={workspaceState.detectedVendors}
-                      policyText={workspaceState.policyText}
-                      noPolicyDoc={workspaceState.noPolicyDoc}
-                      infraCode={workspaceState.infraCode}
-                      virtualTransfer={workspaceState.virtualTransfer}
-                      security={workspaceState.security}
+                  <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+                    <ScenarioDropdown
                       scenarios={DEMO_SCENARIOS}
                       activeScenarioId={activeScenarioId}
-                      inspectionState={inspectionState}
-                      hideScenarioBar
-                      onUpdateWorkspaceMeta={handleUpdateWorkspaceMeta}
-                      onToggleRegion={handleToggleRegion}
-                      onToggleSaasPreset={handleToggleSaasPreset}
-                      onApplyScannedVendors={handleApplyScannedVendors}
-                      onToggleVendorPii={handleToggleVendorPii}
-                      onChangeVendorPurpose={handleChangeVendorPurpose}
-                      onChangeVendorResidency={handleChangeVendorResidency}
-                      onRemoveVendor={handleRemoveVendor}
-                      onChangePolicyText={handleChangePolicyText}
-                      onToggleNoPolicyDoc={handleToggleNoPolicyDoc}
-                      onChangeInfraCode={handleChangeInfraCode}
-                      onChangeVirtualTransfer={handleChangeVirtualTransfer}
-                      onChangeSecurity={handleChangeSecurity}
-                      onLoadScenario={handleLoadScenario}
-                      onRunInspection={handleRunInspection}
-                      onCancelInspection={handleCancelInspection}
-                      onShowToast={showToast}
+                      onSelectScenario={handleLoadScenario}
                     />
-                  )}
+
+                    <button
+                      type="button"
+                      onClick={() => setInputStudioOpen(false)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.08] bg-[#08080A] hover:border-white/[0.16] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
+                    >
+                      <span>입력창 접기</span>
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
-              )}
-            </div>
+
+                <div className="p-5 pt-4 border-t border-white/[0.06] animate-panel-enter">
+                  <GuidedAuditWizard
+                    businessCountry={workspaceState.businessCountry}
+                    dataSubjectCountries={workspaceState.dataSubjectCountries}
+                    industryDomain={workspaceState.industryDomain}
+                    selectedRegions={workspaceState.selectedRegions}
+                    detectedVendors={workspaceState.detectedVendors}
+                    policyText={workspaceState.policyText}
+                    noPolicyDoc={workspaceState.noPolicyDoc}
+                    infraCode={workspaceState.infraCode}
+                    virtualTransfer={workspaceState.virtualTransfer}
+                    security={workspaceState.security}
+                    activePacks={activePacks}
+                    inspectionState={inspectionState}
+                    onUpdateWorkspaceMeta={handleUpdateWorkspaceMeta}
+                    onToggleRegion={handleToggleRegion}
+                    onToggleSaasPreset={handleToggleSaasPreset}
+                    onApplyScannedVendors={handleApplyScannedVendors}
+                    onToggleVendorPii={handleToggleVendorPii}
+                    onChangeVendorPurpose={handleChangeVendorPurpose}
+                    onChangeVendorResidency={handleChangeVendorResidency}
+                    onRemoveVendor={handleRemoveVendor}
+                    onChangePolicyText={handleChangePolicyText}
+                    onToggleNoPolicyDoc={handleToggleNoPolicyDoc}
+                    onChangeInfraCode={handleChangeInfraCode}
+                    onChangeVirtualTransfer={handleChangeVirtualTransfer}
+                    onChangeSecurity={handleChangeSecurity}
+                    onRunInspection={handleRunInspection}
+                    onCancelInspection={handleCancelInspection}
+                    onShowToast={showToast}
+                  />
+                </div>
+              </div>
+            )}
 
             {inspectionState.running && (
               <div
                 role="status"
-                className="no-print rounded-xl border border-sky-500/40 bg-sky-950/25 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+                className="no-print rounded-xl border border-[#38BDF8]/40 bg-[#141419] px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
               >
-                <div className="flex items-center gap-2.5 text-xs text-sky-100">
-                  <Loader2 className="w-4 h-4 animate-spin text-sky-400 shrink-0" />
+                <div className="flex items-center gap-2.5 text-xs text-zinc-100">
+                  <Loader2 className="w-4 h-4 animate-spin text-[#38BDF8] shrink-0" />
                   <span>
                     <strong className="font-semibold">
                       {llmConfig.provider === 'LOCAL_OPENAI_COMPAT'
                         ? `로컬 LLM(${llmConfig.modelName || 'Local'}) 응답 대기 및 심사 진행 중`
                         : 'AI 파싱 및 4계층 법률 심사 진행 중'}
                     </strong>
-                    <span className="text-sky-300/80 ml-2">
+                    <span className="text-zinc-400 ml-2">
                       시간 제한 없이 응답을 기다립니다. 필요 시 우측 버튼으로 즉시 중지할 수 있습니다.
                     </span>
                   </span>
@@ -1268,7 +1210,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleCancelInspection}
-                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-rose-500/90 hover:bg-rose-400 text-[#050507] text-xs font-semibold transition-colors whitespace-nowrap shrink-0"
                 >
                   <Square className="w-3.5 h-3.5 fill-current" />
                   <span>응답 중지</span>
@@ -1277,12 +1219,18 @@ export default function App() {
             )}
 
             {/* Phase 3 Full Enterprise Compliance Report Dashboard */}
-            <div ref={reportSectionRef} className="space-y-6 scroll-mt-20">
+            <div ref={reportSectionRef} className="space-y-5 scroll-mt-20">
               <div className="no-print">
-                <DriftComparisonCard facts={effectiveFacts} result={currentResult} />
+                <DriftComparisonCard
+                  facts={effectiveFacts}
+                  result={currentResult}
+                  onNavigateToRemediation={() => setReportTab('remediation')}
+                />
               </div>
 
+              {/* Executive Passport Stamp Banner */}
               <AuditReportPanel
+                sectionMode="banner"
                 scenarioTitle={
                   activeScenarioId
                     ? activeScenario.title
@@ -1297,58 +1245,177 @@ export default function App() {
                 onRunAudit={handleRunInspection}
               />
 
-              <div className="no-print">
-                <BorderTopologyMap
-                  facts={effectiveFacts}
-                  result={currentResult}
-                  selectedRegionIds={workspaceState.selectedRegions}
-                />
+              {/* 3-Tab Segmented Pill Bar */}
+              <div className="no-print flex items-center justify-between gap-3 overflow-x-auto">
+                <div
+                  role="tablist"
+                  aria-label="심사 리포트 섹션"
+                  className="inline-flex items-center gap-1 p-1 rounded-xl bg-[#0C0C0F] border border-white/[0.07] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={reportTab === 'overview'}
+                    onClick={() => setReportTab('overview')}
+                    className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      reportTab === 'overview'
+                        ? 'bg-[#141419] border-[#38BDF8]/70 text-zinc-50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+                        : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>Overview &amp; Topology</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={reportTab === 'audit'}
+                    onClick={() => setReportTab('audit')}
+                    className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      reportTab === 'audit'
+                        ? 'bg-[#141419] border-[#38BDF8]/70 text-zinc-50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+                        : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>Compliance Audit (3단 신호등 리포트)</span>
+                    <span className="font-mono text-[11px] text-zinc-400 tabular-nums">
+                      ({currentResult.triggered_rules.length})
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={reportTab === 'remediation'}
+                    onClick={() => setReportTab('remediation')}
+                    className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border text-xs font-medium transition-colors whitespace-nowrap ${
+                      reportTab === 'remediation'
+                        ? 'bg-[#141419] border-[#38BDF8]/70 text-zinc-50 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)]'
+                        : 'border-transparent text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    <span>Auto-Remediation Kit (치유 코드)</span>
+                  </button>
+                </div>
               </div>
 
-              <div className="no-print">
-                <DualRemediationKit
+              {/* Tab 1: Overview & Topology */}
+              {reportTab === 'overview' && (
+                <div
+                  key="report-tab-overview"
+                  role="tabpanel"
+                  className="space-y-5 animate-panel-enter"
+                >
+                  <AuditReportPanel
+                    sectionMode="overview-extras"
+                    scenarioTitle={
+                      activeScenarioId
+                        ? activeScenario.title
+                        : activeProfile?.profile_name ?? '현재 워크스페이스'
+                    }
+                    facts={effectiveFacts}
+                    result={currentResult}
+                    activePacks={activePacks}
+                    lastEngineUsed={workspaceState.lastEngineUsed}
+                    parserWarnings={workspaceState.lastWarnings}
+                    isDirty={isDirty}
+                    onRunAudit={handleRunInspection}
+                    onNavigateToRemediation={() => setReportTab('remediation')}
+                  />
+
+                  <div className="no-print">
+                    <BorderTopologyMap
+                      facts={effectiveFacts}
+                      result={currentResult}
+                      selectedRegionIds={workspaceState.selectedRegions}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: Compliance Audit (always mounted for print integrity) */}
+              <div
+                role="tabpanel"
+                className={
+                  reportTab === 'audit'
+                    ? 'animate-panel-enter'
+                    : 'hidden print:block'
+                }
+              >
+                <AuditReportPanel
+                  sectionMode="audit-list"
+                  scenarioTitle={
+                    activeScenarioId
+                      ? activeScenario.title
+                      : activeProfile?.profile_name ?? '현재 워크스페이스'
+                  }
                   facts={effectiveFacts}
                   result={currentResult}
                   activePacks={activePacks}
-                  onApplyLegalDraft={handleApplyLegalDraft}
-                  onApplySecurityFixes={handleApplySecurityFixes}
-                  onShowToast={showToast}
+                  lastEngineUsed={workspaceState.lastEngineUsed}
+                  parserWarnings={workspaceState.lastWarnings}
+                  isDirty={isDirty}
+                  onRunAudit={handleRunInspection}
                 />
               </div>
+
+              {/* Tab 3: Auto-Remediation Kit */}
+              {reportTab === 'remediation' && (
+                <div
+                  key="report-tab-remediation"
+                  role="tabpanel"
+                  className="no-print animate-panel-enter"
+                >
+                  <DualRemediationKit
+                    facts={effectiveFacts}
+                    result={currentResult}
+                    activePacks={activePacks}
+                    onApplyLegalDraft={handleApplyLegalDraft}
+                    onApplySecurityFixes={handleApplySecurityFixes}
+                    onShowToast={showToast}
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}
 
         {activeTab === 'cicd-gate' && (
-          <CicdGateTab
-            activePacks={activePacks}
-            workspaceFacts={effectiveFacts}
-            workspaceProfileName={activeProfile?.profile_name ?? '현재 워크스페이스'}
-            onShowToast={showToast}
-          />
+          <div key="tab-cicd-gate" className="animate-panel-enter">
+            <CicdGateTab
+              activePacks={activePacks}
+              workspaceFacts={effectiveFacts}
+              workspaceProfileName={activeProfile?.profile_name ?? '현재 워크스페이스'}
+              onShowToast={showToast}
+            />
+          </div>
         )}
 
         {activeTab === 'policy-packs' && (
-          <PolicyPacksTab
-            builtInPacks={DEFAULT_POLICY_PACKS}
-            customPacks={customPacks}
-            disabledPackIds={disabledPackIds}
-            onTogglePackActive={handleTogglePackActive}
-            onInstallCustomPack={handleInstallCustomPack}
-            onDeleteCustomPack={handleDeleteCustomPack}
-            onShowToast={showToast}
-          />
+          <div key="tab-policy-packs" className="animate-panel-enter">
+            <PolicyPacksTab
+              builtInPacks={DEFAULT_POLICY_PACKS}
+              customPacks={customPacks}
+              disabledPackIds={disabledPackIds}
+              onTogglePackActive={handleTogglePackActive}
+              onInstallCustomPack={handleInstallCustomPack}
+              onDeleteCustomPack={handleDeleteCustomPack}
+              onShowToast={showToast}
+            />
+          </div>
         )}
 
         {activeTab === 'audit-history' && (
-          <AuditHistoryTab
-            activeProfile={activeProfile}
-            history={history}
-            onRestoreToStudio={handleRestoreHistoryRecord}
-            onDeleteRecord={handleDeleteHistoryRecord}
-            onBackupImported={handleWorkspaceBackupImported}
-            onShowToast={showToast}
-          />
+          <div key="tab-audit-history" className="animate-panel-enter">
+            <AuditHistoryTab
+              activeProfile={activeProfile}
+              history={history}
+              onRestoreToStudio={handleRestoreHistoryRecord}
+              onDeleteRecord={handleDeleteHistoryRecord}
+              onBackupImported={handleWorkspaceBackupImported}
+              onShowToast={showToast}
+            />
+          </div>
         )}
 
         <LlmSettingsModal
@@ -1358,12 +1425,16 @@ export default function App() {
           onSave={(nextConfig) => {
             storageRepository.saveLlmConfig(nextConfig);
             setLlmConfig(nextConfig);
+            const providerNames: Record<string, string> = {
+              GEMINI_CLOUD: 'Gemini Cloud',
+              OPENAI_CLOUD: 'OpenAI Cloud',
+              ANTHROPIC_CLOUD: 'Anthropic Claude',
+              OPENROUTER_CLOUD: 'OpenRouter',
+              CUSTOM_CLOUD: 'Custom Cloud LLM',
+              LOCAL_OPENAI_COMPAT: 'Local LLM',
+            };
             showToast(
-              `AI 엔진 설정 저장됨 (${
-                nextConfig.provider === 'GEMINI_CLOUD'
-                  ? 'Gemini Cloud'
-                  : 'Local LLM'
-              })`,
+              `AI 엔진 설정 저장됨 (${providerNames[nextConfig.provider] ?? nextConfig.provider})`,
               'success',
             );
           }}
@@ -1375,6 +1446,19 @@ export default function App() {
           onCreate={handleCreateProfile}
         />
       </AppShell>
+
+      {showLaserScan && (
+        <div
+          key={scanPulseKey}
+          aria-hidden="true"
+          className="no-print motion-reduce-hidden pointer-events-none fixed inset-0 z-50 overflow-hidden"
+        >
+          <div className="animate-laser-scan-once relative w-full">
+            <div className="h-14 w-full bg-gradient-to-b from-transparent via-[#38BDF8]/[0.06] to-[#38BDF8]/20" />
+            <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[#38BDF8] to-transparent shadow-[0_0_20px_2px_rgba(56,189,248,0.75)]" />
+          </div>
+        </div>
+      )}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
     </>

@@ -581,7 +581,7 @@ export function DualRemediationKit({
       part.startsWith('[입력 필요:') ? (
         <span
           key={idx}
-          className="inline-block whitespace-nowrap align-baseline bg-amber-500/20 text-amber-200 border border-amber-500/40 rounded px-1.5 py-0.5 font-medium"
+          className="inline-block whitespace-nowrap align-baseline bg-amber-500/15 text-amber-200 border border-amber-500/35 rounded px-1.5 py-0.5 font-medium"
         >
           {part}
         </span>
@@ -594,10 +594,10 @@ export function DualRemediationKit({
   return (
     <section
       id="dual-remediation-kit"
-      className={`scroll-mt-20 rounded-xl border bg-[#0B1120] p-5 space-y-5 ${
+      className={`scroll-mt-20 rounded-xl border bg-[#0C0C0F] p-5 space-y-5 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
         isCleanApproved && !expandedWhenApproved
-          ? 'border-emerald-800/60'
-          : 'border-slate-800'
+          ? 'border-emerald-500/30'
+          : 'border-white/[0.07]'
       }`}
     >
       {isCleanApproved ? (
@@ -611,29 +611,29 @@ export function DualRemediationKit({
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {expandedWhenApproved && (
-              <div className="flex items-center gap-1 p-1 rounded-lg bg-[#060913] border border-slate-800 shrink-0">
+              <div className="flex items-center gap-1 p-1 rounded-lg bg-[#08080A] border border-white/[0.07] shrink-0">
                 <button
                   type="button"
                   onClick={() => setActiveTab('legal')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === 'legal'
-                      ? 'bg-sky-500 text-slate-950 font-semibold'
-                      : 'text-slate-300 hover:text-slate-100'
+                      ? 'bg-[#141419] border-[#38BDF8] text-zinc-100'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5" />
+                  <FileText className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Legal Fix Kit (법무 치유)</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setActiveTab('dev')}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                     activeTab === 'dev'
-                      ? 'bg-sky-500 text-slate-950 font-semibold'
-                      : 'text-slate-300 hover:text-slate-100'
+                      ? 'bg-[#141419] border-[#38BDF8] text-zinc-100'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
-                  <Code2 className="w-3.5 h-3.5" />
+                  <Code2 className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Dev Fix Kit (기술 치유)</span>
                 </button>
               </div>
@@ -642,7 +642,7 @@ export function DualRemediationKit({
             <button
               type="button"
               onClick={() => setExpandedWhenApproved((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-700 bg-[#060913] hover:border-slate-600 text-xs font-medium text-slate-200 transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/[0.1] bg-[#08080A] hover:border-white/[0.2] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap shrink-0"
             >
               <span>
                 {expandedWhenApproved ? '접기' : '참고용 표준 템플릿 펼쳐보기'}
@@ -658,12 +658,12 @@ export function DualRemediationKit({
       ) : (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div className="flex items-center gap-2.5">
-            <Wrench className="w-5 h-5 text-sky-400 shrink-0" />
+            <Wrench className="w-5 h-5 text-cyan-400 shrink-0" />
             <div>
-              <h3 className="font-display text-base font-semibold text-slate-100">
+              <h3 className="font-display text-base font-semibold text-zinc-100">
                 원클릭 Dual 자동 치유 키트 (Auto-Remediation Kit)
               </h3>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-zinc-400">
                 탐지된 Drift와 누락 항목을 즉시 해결하기 위한 처리방침 초안 및 인프라 패치 코드를 생성했습니다.
               </p>
             </div>
@@ -674,7 +674,7 @@ export function DualRemediationKit({
               <button
                 type="button"
                 onClick={handleRunSimulation}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                className="btn-shimmer inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-[#FAFAFA] hover:bg-white text-[#050507] text-xs font-semibold transition-colors whitespace-nowrap"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>이 수정 초안을 적용해 재심사 시뮬레이션</span>
@@ -682,29 +682,29 @@ export function DualRemediationKit({
             )}
 
             {/* 2-Tab Switcher */}
-            <div className="flex items-center gap-1 p-1 rounded-lg bg-[#060913] border border-slate-800 shrink-0">
+            <div className="flex items-center gap-1 p-1 rounded-lg bg-[#08080A] border border-white/[0.07] shrink-0">
               <button
                 type="button"
                 onClick={() => setActiveTab('legal')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'legal'
-                    ? 'bg-sky-500 text-slate-950 font-semibold'
-                    : 'text-slate-300 hover:text-slate-100'
+                    ? 'bg-[#141419] border-[#38BDF8] text-zinc-100'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <FileText className="w-3.5 h-3.5" />
+                <FileText className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Legal Fix Kit (법무 치유)</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('dev')}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border text-xs font-medium transition-colors whitespace-nowrap ${
                   activeTab === 'dev'
-                    ? 'bg-sky-500 text-slate-950 font-semibold'
-                    : 'text-slate-300 hover:text-slate-100'
+                    ? 'bg-[#141419] border-[#38BDF8] text-zinc-100'
+                    : 'border-transparent text-zinc-400 hover:text-zinc-200'
                 }`}
               >
-                <Code2 className="w-3.5 h-3.5" />
+                <Code2 className="w-3.5 h-3.5 text-cyan-400" />
                 <span>Dev Fix Kit (기술 치유)</span>
               </button>
             </div>
@@ -734,10 +734,10 @@ export function DualRemediationKit({
         return (
           <div
             role="status"
-            className="rounded-lg border border-emerald-700/70 bg-emerald-950/30 px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+            className="rounded-lg border border-emerald-500/40 bg-emerald-500/[0.07] px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
           >
             <div className="space-y-1">
-              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-slate-100">
+              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm font-semibold text-zinc-100 tabular-nums">
                 <span className="font-mono text-rose-300">
                   BLOCKER {result.stats.blocker_count}건 →{' '}
                   {simulatedResult.stats.blocker_count}건
@@ -746,12 +746,12 @@ export function DualRemediationKit({
                 <span className="font-mono text-emerald-300">
                   {simVerdictLabel} 전환
                 </span>
-                <span className="font-mono text-xs text-emerald-200 bg-emerald-500/20 border border-emerald-500/40 rounded px-2 py-0.5 tabular-nums">
+                <span className="font-mono text-xs text-emerald-200 bg-emerald-500/15 border border-emerald-500/35 rounded px-2 py-0.5 tabular-nums">
                   충족률 {curPassed}/{curTotal} → {simPassed}/{simTotal} (
                   {simulatedResult.stats.pass_rate_percent}%)
                 </span>
               </div>
-              <div className="text-[11px] text-slate-300">
+              <div className="text-[11px] text-zinc-300">
                 원본 입력 상태를 변경하지 않은 가상 시뮬레이션입니다 · 판정{' '}
                 {result.verdict} → {simulatedResult.verdict} · Drift{' '}
                 {result.stats.drift_count}건 → {simulatedResult.stats.drift_count}건
@@ -761,7 +761,7 @@ export function DualRemediationKit({
             <button
               type="button"
               onClick={() => setSimulatedResult(null)}
-              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-slate-700 bg-[#060913] hover:border-slate-600 text-xs text-slate-300 transition-colors whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded border border-white/[0.1] bg-[#08080A] hover:border-white/[0.2] text-xs text-zinc-300 transition-colors whitespace-nowrap shrink-0"
             >
               <RotateCcw className="w-3 h-3" />
               <span>시뮬레이션 닫기</span>
@@ -771,16 +771,16 @@ export function DualRemediationKit({
       })()}
 
       {showKitBody && (activeTab === 'legal' ? (
-        <div className="space-y-4">
+        <div key="kit-legal" className="space-y-4 animate-panel-enter">
           {/* Privacy Policy Draft */}
-          <div className="rounded-lg border border-slate-800 bg-[#060913] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="rounded-lg border border-white/[0.07] bg-[#08080A] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-slate-100 flex items-center gap-1.5">
+                <div className="text-xs font-semibold text-zinc-100 flex items-center gap-1.5">
                   <span>개정 개인정보 처리방침 · 국외 이전 고지 초안 (Markdown)</span>
                   <InfoTooltip term="entrustment_exemption" />
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-zinc-500">
                   코드 스캔으로 알 수 없는 보유기간·세부 컬럼은 노란색 [입력 필요] 플레이스홀더로 표시됩니다.
                 </div>
               </div>
@@ -789,7 +789,7 @@ export function DualRemediationKit({
                   <button
                     type="button"
                     onClick={() => onApplyLegalDraft(legalMarkdownDraft)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#FAFAFA] hover:bg-white text-[#050507] text-xs font-semibold transition-colors whitespace-nowrap"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>처리방침에 초안 반영</span>
@@ -800,7 +800,7 @@ export function DualRemediationKit({
                   onClick={() =>
                     copyText('legal-md', legalMarkdownDraft, '처리방침 국외 이전 초안')
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
                 >
                   {copiedId === 'legal-md' ? (
                     <>
@@ -816,19 +816,19 @@ export function DualRemediationKit({
                 </button>
               </div>
             </div>
-            <pre className="p-4 text-xs font-mono text-slate-200 whitespace-pre-wrap leading-relaxed overflow-x-auto">
+            <pre className="p-4 text-xs font-mono text-zinc-200 whitespace-pre-wrap leading-relaxed overflow-x-auto">
               {renderHighlightedTemplate(legalMarkdownDraft)}
             </pre>
           </div>
 
           {/* Separate Consent UI Snippet */}
-          <div className="rounded-lg border border-slate-800 bg-[#060913] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-800 flex items-center justify-between gap-3">
+          <div className="rounded-lg border border-white/[0.07] bg-[#08080A] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] flex flex-wrap items-center justify-between gap-3">
               <div>
-                <div className="text-xs font-semibold text-slate-100">
+                <div className="text-xs font-semibold text-zinc-100">
                   회원가입 / 결제 국외 제3자 제공 별도 동의 UI 스니펫 (React JSX)
                 </div>
-                <div className="text-[11px] text-slate-400">
+                <div className="text-[11px] text-zinc-500">
                   {hasThirdPartySharing
                     ? 'THIRD_PARTY_SHARING 목적이 탐지되어 별도 동의 체크박스 UI 반영이 필요합니다.'
                     : '제3자 제공(THIRD_PARTY_SHARING) 목적 추가 시 사용할 수 있는 표준 동의 UI입니다.'}
@@ -839,7 +839,7 @@ export function DualRemediationKit({
                 onClick={() =>
                   copyText('consent-ui', consentUiSnippet, '별도 동의 UI 코드')
                 }
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap shrink-0"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap shrink-0"
               >
                 {copiedId === 'consent-ui' ? (
                   <>
@@ -854,28 +854,25 @@ export function DualRemediationKit({
                 )}
               </button>
             </div>
-            <pre className="p-4 text-xs font-mono text-slate-200 overflow-x-auto leading-relaxed">
+            <pre className="p-4 text-xs font-mono text-zinc-200 overflow-x-auto leading-relaxed">
               {renderHighlightedTemplate(consentUiSnippet)}
             </pre>
           </div>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div key="kit-dev" className="space-y-4 animate-panel-enter">
           {/* Non-expert Cloud Console Checklist */}
-          <div className="rounded-lg border border-slate-800 bg-[#060913] p-4 space-y-3">
-            <div className="text-xs font-semibold text-slate-100">
+          <div className="rounded-lg border border-white/[0.07] bg-[#08080A] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] text-xs font-semibold text-zinc-100">
               비전문가용 클라우드 콘솔 클릭 체크리스트
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-white/[0.06]">
               {consoleChecklist.map((step) => (
-                <div
-                  key={step.title}
-                  className="rounded-lg border border-slate-800 bg-[#0B1120] p-3"
-                >
-                  <div className="text-xs font-semibold text-sky-300">
+                <div key={step.title} className="p-4 border-b border-white/[0.06] last:border-b-0">
+                  <div className="text-xs font-semibold text-cyan-300">
                     {step.title}
                   </div>
-                  <p className="text-[11px] text-slate-300 mt-1 leading-relaxed">
+                  <p className="text-[11px] text-zinc-300 mt-1.5 leading-relaxed">
                     {step.detail}
                   </p>
                 </div>
@@ -884,17 +881,17 @@ export function DualRemediationKit({
           </div>
 
           {/* Code Diff Viewer (Before vs After) */}
-          <div className="rounded-lg border border-slate-800 bg-[#060913] overflow-hidden">
-            <div className="px-4 py-3 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="rounded-lg border border-white/[0.07] bg-[#08080A] overflow-hidden">
+            <div className="px-4 py-3 border-b border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div className="flex flex-wrap items-center gap-1.5">
-                <Terminal className="w-4 h-4 text-sky-400 mr-1" />
+                <Terminal className="w-4 h-4 text-cyan-400 mr-1" />
                 <button
                   type="button"
                   onClick={() => setActiveDiffTab('terraform')}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                  className={`px-2.5 py-1 rounded border text-xs font-mono transition-colors ${
                     activeDiffTab === 'terraform'
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#141419] text-zinc-100 border-[#38BDF8]'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   Terraform HCL
@@ -902,10 +899,10 @@ export function DualRemediationKit({
                 <button
                   type="button"
                   onClick={() => setActiveDiffTab('iam-json')}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                  className={`px-2.5 py-1 rounded border text-xs font-mono transition-colors ${
                     activeDiffTab === 'iam-json'
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#141419] text-zinc-100 border-[#38BDF8]'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   AWS S3 / IAM Policy
@@ -913,10 +910,10 @@ export function DualRemediationKit({
                 <button
                   type="button"
                   onClick={() => setActiveDiffTab('ai-middleware')}
-                  className={`px-2.5 py-1 rounded text-xs font-mono transition-colors ${
+                  className={`px-2.5 py-1 rounded border text-xs font-mono transition-colors ${
                     activeDiffTab === 'ai-middleware'
-                      ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                      : 'text-slate-400 hover:text-slate-200'
+                      ? 'bg-[#141419] text-zinc-100 border-[#38BDF8]'
+                      : 'border-transparent text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
                   LLM PII Masking
@@ -928,7 +925,7 @@ export function DualRemediationKit({
                   <button
                     type="button"
                     onClick={onApplySecurityFixes}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-semibold transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 text-xs font-semibold transition-colors whitespace-nowrap"
                   >
                     <Sparkles className="w-3.5 h-3.5" />
                     <span>보안·ZDR 설정 반영</span>
@@ -943,7 +940,7 @@ export function DualRemediationKit({
                       '인프라 패치 코드',
                     )
                   }
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] text-xs font-medium text-zinc-200 transition-colors whitespace-nowrap"
                 >
                   {copiedId === `diff-${activeDiffTab}` ? (
                     <>
@@ -964,10 +961,10 @@ export function DualRemediationKit({
               {activeDiffLines.map((line, idx) => {
                 const lineClass =
                   line.type === 'remove'
-                    ? 'bg-rose-950/50 text-rose-300'
+                    ? 'bg-rose-500/[0.12] text-rose-300'
                     : line.type === 'add'
-                      ? 'bg-emerald-950/45 text-emerald-300'
-                      : 'text-slate-300';
+                      ? 'bg-emerald-500/[0.12] text-emerald-300'
+                      : 'text-zinc-400';
                 const prefix =
                   line.type === 'remove' ? '- ' : line.type === 'add' ? '+ ' : '  ';
                 return (

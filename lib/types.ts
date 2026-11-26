@@ -136,6 +136,7 @@ export interface CanonicalFactModel {
   transfers: {
     has_cross_border: boolean;
     destination_countries: string[];
+    infra_countries?: string[];
     detected_vendors: DetectedVendor[];
     virtual_transfer: VirtualTransferFacts;
   };
@@ -376,7 +377,13 @@ export interface AuditHistoryRecord {
   };
 }
 
-export type LlmProvider = 'GEMINI_CLOUD' | 'LOCAL_OPENAI_COMPAT';
+export type LlmProvider =
+  | 'GEMINI_CLOUD'
+  | 'OPENAI_CLOUD'
+  | 'ANTHROPIC_CLOUD'
+  | 'OPENROUTER_CLOUD'
+  | 'CUSTOM_CLOUD'
+  | 'LOCAL_OPENAI_COMPAT';
 
 export interface LlmConfig {
   provider: LlmProvider;

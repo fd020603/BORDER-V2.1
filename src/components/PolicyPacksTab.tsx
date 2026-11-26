@@ -369,43 +369,45 @@ export function PolicyPacksTab({
   return (
     <div className="space-y-6">
       {/* Header + 4-Layer Filter Tabs */}
-      <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-4">
+      <section className="rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <Layers className="w-5 h-5 text-sky-400" />
-              <h2 className="font-display text-base font-semibold text-slate-100">
+              <Layers className="w-5 h-5 text-cyan-400" />
+              <h2 className="font-display text-base font-semibold text-zinc-100">
                 4계층 플러그인 법률 팩 관리 &amp; JSON 업로더
               </h2>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
+            <p className="text-xs text-zinc-400 mt-1">
               팩을 켜고 끄거나 신규 국가 `PolicyPackV2` JSON을 장착하면 `Live Audit Studio` 및 `CI/CD Gate` 판정에 즉시 반영됩니다.
             </p>
           </div>
-          <div className="font-mono text-xs text-slate-300 tabular-nums">
+          <div className="font-mono text-xs text-zinc-300 tabular-nums">
             활성 팩 {allPacks.filter((p) => !disabledPackIds.includes(p.pack_meta.id)).length} /{' '}
             {allPacks.length}종
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800">
-          {LAYER_TABS.map((tab) => {
-            const active = layerFilter === tab.id;
-            return (
-              <button
-                key={String(tab.id)}
-                type="button"
-                onClick={() => setLayerFilter(tab.id)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors whitespace-nowrap ${
-                  active
-                    ? 'bg-sky-500 text-slate-950 font-semibold'
-                    : 'bg-[#060913] text-slate-300 border border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+        <div className="pt-3 border-t border-white/[0.06]">
+          <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-lg bg-[#08080A] border border-white/[0.07]">
+            {LAYER_TABS.map((tab) => {
+              const active = layerFilter === tab.id;
+              return (
+                <button
+                  key={String(tab.id)}
+                  type="button"
+                  onClick={() => setLayerFilter(tab.id)}
+                  className={`px-3 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap ${
+                    active
+                      ? 'bg-[#FAFAFA] border-[#FAFAFA] text-[#050507] font-semibold'
+                      : 'bg-transparent border-transparent text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.04]'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -419,15 +421,15 @@ export function PolicyPacksTab({
           return (
             <article
               key={`${pack.pack_meta.id}-${pack.pack_meta.version}-${isCustom ? 'custom' : 'builtin'}-${idx}`}
-              className={`rounded-xl border p-5 flex flex-col justify-between gap-4 transition-colors ${
+              className={`rounded-xl border p-5 flex flex-col justify-between gap-4 transition-colors shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] ${
                 isActive && !isSupersededBuiltIn
-                  ? 'border-slate-800 bg-[#0B1120]'
-                  : 'border-slate-800/60 bg-[#080C17] opacity-65'
+                  ? 'border-white/[0.07] bg-[#0C0C0F] hover:border-white/[0.14]'
+                  : 'border-white/[0.05] bg-[#08080A] opacity-65'
               }`}
             >
               <div className="space-y-2.5">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-mono text-sky-300">
+                  <span className="font-mono text-cyan-300">
                     Layer {pack.pack_meta.layer} · {pack.pack_meta.country_code} · v
                     {pack.pack_meta.version}
                   </span>
@@ -438,7 +440,7 @@ export function PolicyPacksTab({
                         type="button"
                         onClick={() => onDeleteCustomPack(pack.pack_meta.id)}
                         aria-label={`${pack.pack_meta.id} 삭제`}
-                        className="p-1 text-slate-400 hover:text-rose-300 rounded"
+                        className="p-1 text-zinc-500 hover:text-rose-300 rounded transition-colors"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -448,8 +450,8 @@ export function PolicyPacksTab({
                       onClick={() => onTogglePackActive(pack.pack_meta.id)}
                       className={`px-2.5 py-1 rounded border font-mono text-[11px] font-semibold transition-colors whitespace-nowrap ${
                         isActive
-                          ? 'bg-emerald-950/50 border-emerald-700 text-emerald-300'
-                          : 'bg-slate-900 border-slate-700 text-slate-400'
+                          ? 'bg-emerald-500/[0.1] border-emerald-500/35 text-emerald-300'
+                          : 'bg-[#08080A] border-white/[0.1] text-zinc-500'
                       }`}
                     >
                       {isActive ? '자동 매칭 (AUTO)' : '제외 (OFF)'}
@@ -462,33 +464,33 @@ export function PolicyPacksTab({
                   onClick={() => setInspectedPack(pack)}
                   className="text-left w-full group"
                 >
-                  <div className="font-mono text-xs text-slate-400 flex flex-wrap items-center gap-1.5">
+                  <div className="font-mono text-xs text-zinc-400 flex flex-wrap items-center gap-1.5">
                     <span>
                       {pack.pack_meta.id} {isCustom ? '· 플러그인' : '· 공식 기본 팩'}
                     </span>
                     {isSupersededBuiltIn && (
-                      <span className="px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/40 text-amber-300 text-[10px] font-sans">
+                      <span className="px-1.5 py-0.2 rounded bg-amber-500/15 border border-amber-500/35 text-amber-300 text-[10px] font-sans">
                         신규 플러그인으로 대체됨
                       </span>
                     )}
                   </div>
-                  <h3 className="font-display text-sm font-semibold text-slate-100 group-hover:text-sky-300 transition-colors mt-0.5">
+                  <h3 className="font-display text-sm font-semibold text-zinc-100 group-hover:text-cyan-300 transition-colors mt-0.5">
                     {pack.pack_meta.law_name}
                   </h3>
-                  <p className="text-xs text-slate-400 mt-1.5 leading-relaxed line-clamp-2">
+                  <p className="text-xs text-zinc-400 mt-1.5 leading-relaxed line-clamp-2">
                     {pack.pack_meta.penalty_summary}
                   </p>
                 </button>
               </div>
 
-              <div className="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
-                <span className="font-mono text-slate-300 tabular-nums">
+              <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs">
+                <span className="font-mono text-zinc-400 tabular-nums">
                   규칙 {pack.rules.length}개 · 시행 {pack.pack_meta.effective_date}
                 </span>
                 <button
                   type="button"
                   onClick={() => setInspectedPack(pack)}
-                  className="text-sky-400 hover:text-sky-300 font-medium whitespace-nowrap"
+                  className="text-cyan-400 hover:text-cyan-300 font-medium whitespace-nowrap transition-colors"
                 >
                   룰셋 상세 보기
                 </button>
@@ -499,16 +501,16 @@ export function PolicyPacksTab({
       </section>
 
       {/* Plugin JSON Uploader */}
-      <section className="rounded-xl border border-slate-800 bg-[#0B1120] p-5 space-y-4">
+      <section className="rounded-xl border border-white/[0.07] bg-[#0C0C0F] shadow-[inset_0_1px_0_0_rgba(255,255,255,0.06)] p-5 space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <FileJson className="w-4 h-4 text-sky-400" />
-              <h3 className="font-display text-sm font-semibold text-slate-100">
+              <FileJson className="w-4 h-4 text-cyan-400" />
+              <h3 className="font-display text-sm font-semibold text-zinc-100">
                 신규 법률 팩 JSON 플러그인 업로더
               </h3>
             </div>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-zinc-400 mt-0.5">
               표준 `PolicyPackV2` JSON 파일을 업로드하거나 붙여넣어 엔진에 즉시 장착(또는 기존 팩 상위 버전 덮어쓰기)할 수 있습니다.
             </p>
           </div>
@@ -517,9 +519,9 @@ export function PolicyPacksTab({
             <button
               type="button"
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#060913] border border-slate-700 hover:border-slate-600 text-xs text-slate-200 transition-colors whitespace-nowrap"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#08080A] border border-white/[0.1] hover:border-white/[0.2] text-xs text-zinc-200 transition-colors whitespace-nowrap"
             >
-              <Download className="w-3.5 h-3.5" />
+              <Download className="w-3.5 h-3.5 text-cyan-400" />
               <span>빈 PolicyPackV2 JSON 템플릿 다운로드</span>
             </button>
           </div>
@@ -542,7 +544,7 @@ export function PolicyPacksTab({
                 fileInputRef.current?.click();
               }
             }}
-            className="lg:col-span-4 rounded-lg border border-dashed border-slate-700 bg-[#060913] hover:border-slate-500 p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-colors"
+            className="lg:col-span-4 rounded-lg border border-dashed border-white/[0.12] bg-[#08080A] hover:border-white/[0.22] p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-colors"
           >
             <input
               ref={fileInputRef}
@@ -555,11 +557,11 @@ export function PolicyPacksTab({
                 e.target.value = '';
               }}
             />
-            <UploadCloud className="w-6 h-6 text-sky-400 mb-2" />
-            <div className="text-xs font-medium text-slate-200">
+            <UploadCloud className="w-6 h-6 text-cyan-400 mb-2" />
+            <div className="text-xs font-medium text-zinc-200">
               `.json` 법률 팩 파일 드래그 &amp; 드롭
             </div>
-            <div className="text-[11px] text-slate-400 mt-1">
+            <div className="text-[11px] text-zinc-500 mt-1">
               스키마 및 9종 DSL 연산자 유효성 자동 검증
             </div>
           </div>
@@ -570,7 +572,7 @@ export function PolicyPacksTab({
               onChange={(e) => setJsonInput(e.target.value)}
               rows={5}
               placeholder='{"pack_meta": { "id": "TW_PDPA_V2", "layer": 1, ... }, "applicability": ..., "rules": [...] }'
-              className="w-full rounded-lg bg-[#060913] border border-slate-800 p-3 font-mono text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-sky-500"
+              className="w-full rounded-lg bg-[#08080A] border border-white/[0.08] p-3 font-mono text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:border-[#38BDF8]"
             />
             <div className="flex items-center justify-between gap-3">
               {uploadStatus ? (
@@ -587,7 +589,7 @@ export function PolicyPacksTab({
                   <span>{uploadStatus.message}</span>
                 </div>
               ) : (
-                <span className="text-[11px] text-slate-400">
+                <span className="text-[11px] text-zinc-500">
                   업로드된 팩은 브라우저 저장소(`storageRepository`)에 영구 보관됩니다.
                 </span>
               )}
@@ -596,7 +598,7 @@ export function PolicyPacksTab({
                 type="button"
                 disabled={!jsonInput.trim()}
                 onClick={() => handleInstallJsonText(jsonInput)}
-                className="px-4 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-xs font-medium text-slate-100 transition-colors whitespace-nowrap shrink-0"
+                className="px-4 py-1.5 rounded-lg bg-[#FAFAFA] hover:bg-white disabled:bg-white/[0.06] disabled:text-zinc-500 text-xs font-semibold text-[#050507] transition-colors whitespace-nowrap shrink-0"
               >
                 JSON 검증 및 장착
               </button>
@@ -608,7 +610,7 @@ export function PolicyPacksTab({
       {/* Ruleset Inspector Modal */}
       {inspectedPack && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
           onClick={(e) => {
             if (e.target === e.currentTarget) setInspectedPack(null);
           }}
@@ -617,17 +619,17 @@ export function PolicyPacksTab({
             role="dialog"
             aria-modal="true"
             aria-labelledby="pack-inspector-modal-title"
-            className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-slate-700 bg-[#0B1120] shadow-2xl flex flex-col overflow-hidden"
+            className="w-full max-w-3xl max-h-[85vh] rounded-xl border border-white/[0.1] bg-[#0C0C0F] shadow-2xl flex flex-col overflow-hidden"
           >
-            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
+            <div className="px-5 py-4 border-b border-white/[0.06] flex items-center justify-between gap-4">
               <div>
-                <div className="font-mono text-xs text-sky-300">
+                <div className="font-mono text-xs text-cyan-300">
                   Layer {inspectedPack.pack_meta.layer} · {inspectedPack.pack_meta.id} · v
                   {inspectedPack.pack_meta.version}
                 </div>
                 <h3
                   id="pack-inspector-modal-title"
-                  className="font-display text-base font-semibold text-slate-100 mt-0.5"
+                  className="font-display text-base font-semibold text-zinc-100 mt-0.5"
                 >
                   {inspectedPack.pack_meta.law_name}
                 </h3>
@@ -636,25 +638,25 @@ export function PolicyPacksTab({
                 type="button"
                 onClick={() => setInspectedPack(null)}
                 aria-label="인스펙터 닫기"
-                className="p-1.5 text-slate-400 hover:text-slate-100 rounded"
+                className="p-1.5 text-zinc-400 hover:text-zinc-100 rounded transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <div className="p-5 overflow-y-auto space-y-4">
-              <div className="rounded-lg border border-slate-800 bg-[#060913] p-3.5 text-xs space-y-1.5">
-                <div className="text-slate-400 font-medium">발동 조건 (Applicability DSL)</div>
-                <pre className="font-mono text-[11px] text-slate-200 overflow-x-auto">
+              <div className="rounded-lg border border-white/[0.07] bg-[#08080A] p-3.5 text-xs space-y-1.5">
+                <div className="text-zinc-400 font-medium">발동 조건 (Applicability DSL)</div>
+                <pre className="font-mono text-[11px] text-zinc-200 overflow-x-auto">
                   {JSON.stringify(inspectedPack.applicability, null, 2)}
                 </pre>
               </div>
 
-              <div className="space-y-3">
+              <div className="rounded-lg border border-white/[0.07] bg-[#08080A] divide-y divide-white/[0.06]">
                 {inspectedPack.rules.map((rule) => (
                   <div
                     key={rule.rule_id}
-                    className="rounded-lg border border-slate-800 bg-[#060913] p-4 space-y-2"
+                    className="p-4 space-y-2"
                   >
                     <div className="flex flex-wrap items-center gap-2 text-xs font-mono">
                       <span
@@ -666,16 +668,16 @@ export function PolicyPacksTab({
                       >
                         {rule.severity}
                       </span>
-                      <span className="text-slate-600">·</span>
-                      <span className="text-slate-200">{rule.rule_id}</span>
-                      <span className="text-slate-600">·</span>
-                      <span className="text-slate-400">{rule.article_citation}</span>
+                      <span className="text-zinc-600">·</span>
+                      <span className="text-zinc-200">{rule.rule_id}</span>
+                      <span className="text-zinc-600">·</span>
+                      <span className="text-zinc-400">{rule.article_citation}</span>
                     </div>
-                    <div className="text-sm font-semibold text-slate-100">
+                    <div className="text-sm font-semibold text-zinc-100">
                       {rule.plain_title}
                     </div>
-                    <p className="text-xs text-slate-300">{rule.plain_explanation}</p>
-                    <pre className="rounded bg-[#0B1120] border border-slate-800 p-2.5 text-[11px] font-mono text-sky-200 overflow-x-auto">
+                    <p className="text-xs text-zinc-300">{rule.plain_explanation}</p>
+                    <pre className="rounded bg-[#0C0C0F] border border-white/[0.06] p-2.5 text-[11px] font-mono text-cyan-200 overflow-x-auto">
                       {JSON.stringify(rule.condition_dsl, null, 2)}
                     </pre>
                   </div>

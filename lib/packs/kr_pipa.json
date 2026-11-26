@@ -439,6 +439,11 @@
                 "fact": "legal_doc.disclosed_vendors",
                 "operator": "is_empty",
                 "value": true
+              },
+              {
+                "fact": "derived.has_undisclosed_vendor",
+                "operator": "equals",
+                "value": true
               }
             ]
           }
@@ -446,6 +451,9 @@
       },
       "drift_check": {
         "enabled": true,
+        "drift_type": "UNDISCLOSED_VENDOR",
+        "fact_path": "derived.undisclosed_vendors",
+        "doc_claim_path": "legal_doc.disclosed_vendors",
         "condition": {
           "all": [
             {
@@ -454,9 +462,18 @@
               "value": true
             },
             {
-              "fact": "legal_doc.disclosed_vendors",
-              "operator": "is_empty",
-              "value": true
+              "any": [
+                {
+                  "fact": "legal_doc.disclosed_vendors",
+                  "operator": "is_empty",
+                  "value": true
+                },
+                {
+                  "fact": "derived.has_undisclosed_vendor",
+                  "operator": "equals",
+                  "value": true
+                }
+              ]
             },
             {
               "fact": "transfers.detected_vendors",
@@ -468,7 +485,7 @@
             }
           ]
         },
-        "alert_message": "Policy-Infra Drift 탐지: 코드·인프라에서 외부 수탁사 연동이 탐지되었으나, 게시된 개인정보 처리방침에는 수탁자 목록이 비어 있습니다."
+        "alert_message": "Policy-Infra Drift 탐지: 코드·인프라에서 외부 수탁사 연동이 탐지되었으나, 게시된 개인정보 처리방침에는 해당 수탁자 목록이 누락되어 있습니다."
       },
       "remediation": {
         "legal_template": "[개인정보 처리업무의 위탁에 관한 사항]\n회사는 원활한 서비스 제공을 위하여 다음과 같이 개인정보 처리업무를 위탁하고 있습니다.\n- 수탁자(재수탁자 포함): [입력 필요: 수탁사 법인명]\n- 위탁하는 업무의 내용: [입력 필요: 클라우드 호스팅, 결제 처리, 문자 발송 등 구체적 업무 내용]",
@@ -601,6 +618,99 @@
       "remediation": {
         "legal_template": "[인공지능 처리 및 자동화된 결정에 관한 안내]\n1. 자동화된 결정(AI)의 기준·절차 및 개인정보 처리 방식: [입력 필요: AI 기능 적용 범위 및 입력 데이터 처리 방식]\n2. AI 모델 학습 활용 여부 및 거부(Opt-out)·설명 요구 방법: 정보주체는 [입력 필요: 서비스 내 설정 경로 또는 고객센터 연락처]를 통해 자동화된 결정에 대한 거부·설명 요구 및 AI 학습 활용 제외를 요청할 수 있습니다.",
         "infra_patch_hint": "외부 AI API 벤더 설정에서 Zero Data Retention(데이터 학습 제외) 옵션을 활성화하거나, AI 프롬프트·요청 페이로드 전송 전 PII 마스킹 필터를 적용하세요."
+      }
+    },
+    {
+      "rule_id": "KR-PIPA-28-8-UNDISCLOSED-DEST",
+      "category": "CROSS_BORDER_TRANSFER",
+      "severity": "BLOCKER",
+      "article_citation": "개인정보 보호법 제28조의8 제2항, 제30조 제1항",
+      "plain_title": "실제 데이터 전송 국가 대비 처리방침 수신국 고지 누락(미공개 이전국) 탐지",
+      "plain_explanation": "클라우드 리전 또는 외부 서비스 연동상 데이터가 국외로 이전·보관되거나 국외 사업자가 국내 정보주체의 데이터를 처리하고 있으나, 개인정보 처리방침에 해당 이전 대상 국가가 모두 명시되어 있지 않습니다.",
+      "condition_dsl": {
+        "any": [
+          {
+            "all": [
+              {
+                "fact": "transfers.has_cross_border",
+                "operator": "equals",
+                "value": true
+              },
+              {
+                "fact": "derived.has_undisclosed_destination_country",
+                "operator": "equals",
+                "value": true
+              }
+            ]
+          },
+          {
+            "all": [
+              {
+                "fact": "workspace.business_country",
+                "operator": "not_equals",
+                "value": "KR"
+              },
+              {
+                "fact": "workspace.data_subject_countries",
+                "operator": "includes",
+                "value": "KR"
+              },
+              {
+                "fact": "legal_doc.disclosed_countries",
+                "operator": "not_includes",
+                "value": "@workspace.business_country"
+              }
+            ]
+          }
+        ]
+      },
+      "drift_check": {
+        "enabled": true,
+        "drift_type": "UNDISCLOSED_COUNTRY",
+        "fact_path": "derived.undisclosed_destination_countries",
+        "doc_claim_path": "legal_doc.disclosed_countries",
+        "condition": {
+          "any": [
+            {
+              "all": [
+                {
+                  "fact": "transfers.has_cross_border",
+                  "operator": "equals",
+                  "value": true
+                },
+                {
+                  "fact": "derived.has_undisclosed_destination_country",
+                  "operator": "equals",
+                  "value": true
+                }
+              ]
+            },
+            {
+              "all": [
+                {
+                  "fact": "workspace.business_country",
+                  "operator": "not_equals",
+                  "value": "KR"
+                },
+                {
+                  "fact": "workspace.data_subject_countries",
+                  "operator": "includes",
+                  "value": "KR"
+                },
+                {
+                  "fact": "legal_doc.disclosed_countries",
+                  "operator": "not_includes",
+                  "value": "@workspace.business_country"
+                }
+              ]
+            }
+          ]
+        },
+        "alert_message": "Policy-Infra Drift 탐지: 실제 인프라 리전 또는 외부 서비스가 데이터를 전송하는 국가가 개인정보 처리방침의 이전 대상 국가 목록에 누락되어 있습니다."
+      },
+      "remediation": {
+        "legal_template": "[국외 이전 대상 국가 보완 안내]\n회사는 서비스 제공을 위해 실제 이용 중인 모든 리전 및 수탁사 소재국([입력 필요: 누락된 국가명 일체])을 개인정보 처리방침의 국외 이전·보관 국가 목록에 정확히 추가 고지합니다.",
+        "infra_patch_hint": "실제 배포된 클라우드 리전(예: AWS Seoul/Tokyo/Virginia)과 외부 SaaS 벤더의 데이터 저장 국가 목록을 추출해 처리방침의 이전 국가 목록과 1:1로 일치시키세요."
       }
     }
   ]
